@@ -1,0 +1,51 @@
+GTD COACH QUICK REFERENCE
+========================
+
+START YOUR REVIEW
+$ ~/gtd-coach/start-coach.sh
+
+REVIEW PHASES (30 minutes)
+--------------------------
+1. STARTUP     (2 min)  - Get ready, coach welcomes you
+2. MIND SWEEP  (10 min) - Type everything on your mind
+3. PROJECTS    (12 min) - One next action per project (45 sec each)
+4. PRIORITIES  (5 min)  - Pick top 5-7 items, assign A/B/C
+5. WRAP-UP     (3 min)  - Review stats and celebrate!
+
+KEY INTERACTIONS
+----------------
+- Press ENTER after each item/response
+- Keep responses short
+- Trust the time limits
+- First thought = best thought
+- Ctrl+C to emergency stop (saves progress)
+
+AUDIO ALERTS
+------------
+- 50% time: Tink sound
+- 20% time: Tink sound  
+- 10% time: Purr sound
+- Complete: Glass sound
+
+AFTER YOUR REVIEW
+-----------------
+Your data saved in:
+- ~/gtd-coach/data/mindsweep_[date].json
+- ~/gtd-coach/data/priorities_[date].json
+- ~/gtd-coach/logs/review_[date].json
+
+TEST COMMANDS
+-------------
+Timer test:     ~/gtd-coach/scripts/timer.sh 1 "Test done!"
+Connection:     python3 ~/gtd-coach/test-simple-prompt.py
+Demo review:    python3 ~/gtd-coach/demo-review.py
+
+TIPS FOR SUCCESS
+----------------
+✓ Same time each week
+✓ Phone in another room
+✓ Stand up if possible
+✓ Water nearby
+✓ Celebrate completion!
+
+Remember: Done > Perfect!
