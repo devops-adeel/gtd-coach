@@ -29,6 +29,33 @@ python3 ~/gtd-coach/test_graphiti_integration.py
 
 # Generate weekly summary
 python3 ~/gtd-coach/generate_summary.py
+
+# Test Langfuse integration
+python3 ~/gtd-coach/test_langfuse.py
+```
+
+### Docker/OrbStack Commands (for externally managed Python environments)
+
+```bash
+# Run weekly review in Docker
+./docker-run.sh
+
+# Test Langfuse integration
+./docker-run.sh test
+
+# Generate weekly summary
+./docker-run.sh summary
+
+# Build/rebuild Docker image
+./docker-run.sh build
+
+# Open shell in container for debugging
+./docker-run.sh shell
+
+# Using docker-compose directly
+docker compose up gtd-coach            # Run review
+docker compose run test-langfuse       # Test Langfuse
+docker compose run generate-summary    # Generate summary
 ```
 
 ## Architecture
@@ -43,26 +70,29 @@ The system follows a **Phase-Based State Machine** with strict time boxing:
 
 ### Key Components
 - **gtd-review.py**: Main orchestrator class `GTDCoach` manages the entire review process
-- **start-coach.sh**: Handles LM Studio server lifecycle and model loading
+- **start-coach.sh**: Handles LM Studio server lifecycle and model loading (now includes Langfuse health check)
 - **scripts/timer.sh**: Standalone timer with audio alerts at 50%, 20%, and 10% remaining
 - **prompts/**: System prompts (full vs simple) for ADHD-optimized coaching
 - **graphiti_integration.py**: Async memory management with episode batching
 - **adhd_patterns.py**: ADHD pattern detection algorithms
 - **generate_summary.py**: Weekly insights generator
+- **langfuse_tracker.py**: Langfuse integration for LLM performance monitoring
+- **test_langfuse.py**: Validation script for Langfuse connectivity and scoring
 
 ### Data Flow
 ```
 User Input → Python Orchestrator → LM Studio API → Llama Model → Structured Response → JSON Logging
-                     ↓
-             Graphiti Memory (Async)
-                     ↓
-          Pattern Detection & Analysis
+                     ↓                    ↓
+             Graphiti Memory (Async)  Langfuse Observability
+                     ↓                    ↓
+          Pattern Detection & Analysis  Performance Metrics
 ```
 
 All data is persisted in:
 - `data/`: Mindsweep captures, priorities, and Graphiti batches (JSON format with timestamps)
 - `logs/`: Complete review session transcripts
 - `summaries/`: AI-generated weekly insights (Markdown format)
+- **Langfuse UI**: LLM performance metrics, traces, and quality scores (when configured)
 
 ### API Integration
 - LM Studio server: `http://localhost:1234/v1/chat/completions`
@@ -139,11 +169,37 @@ Episodes follow this structure:
 }
 ```
 
+## Langfuse Integration Details
+
+### What Gets Tracked
+- **Response Latency**: Per-phase timing for each LLM interaction
+- **Success/Failure Rates**: Retry patterns and error tracking
+- **Quality Scores**: Three dimensions:
+  - Binary success/failure
+  - Phase-specific latency thresholds
+  - Response appropriateness (for manual review)
+
+### Implementation Approach
+The integration uses Langfuse's drop-in OpenAI replacement:
+1. Wraps LM Studio API calls with automatic tracing
+2. Falls back gracefully if Langfuse is unavailable
+3. Adds minimal overhead with background batching
+4. Preserves all existing retry and error handling logic
+
+### Configuration
+Update `langfuse_tracker.py` with your Langfuse instance details:
+```python
+LANGFUSE_HOST = "http://localhost:3000"  # Your Langfuse URL
+LANGFUSE_PUBLIC_KEY = "pk-lf-..."       # Your public key
+LANGFUSE_SECRET_KEY = "sk-lf-..."       # Your secret key
+```
+
 ## Future Enhancement Opportunities
 
 1. **Timing App Integration**: Auto-populate project lists from Timing.app
 2. **Graphiti Memory**: ✅ IMPLEMENTED - Tracks patterns across reviews for insights
-3. **Metrics Dashboard**: Visualize review completion and patterns
-4. **Cross-Platform Support**: Replace macOS-specific components
-5. **Streaming Responses**: Prevent timeout issues with large prompts
-6. **Real-time MCP Integration**: Direct Graphiti API calls instead of batch files
+3. **Langfuse Observability**: ✅ IMPLEMENTED - LLM performance monitoring
+4. **Metrics Dashboard**: Visualize review completion and patterns
+5. **Cross-Platform Support**: Replace macOS-specific components
+6. **Streaming Responses**: Prevent timeout issues with large prompts
+7. **Real-time MCP Integration**: Direct Graphiti API calls instead of batch files

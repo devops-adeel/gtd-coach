@@ -19,10 +19,24 @@ from pathlib import Path
 from graphiti_integration import GraphitiMemory
 from adhd_patterns import ADHDPatternDetector
 
+# Import Langfuse for LLM observability
+try:
+    from langfuse_tracker import get_langfuse_client, score_response, validate_configuration
+    from langfuse import observe
+    LANGFUSE_AVAILABLE = True
+except ImportError:
+    LANGFUSE_AVAILABLE = False
+    observe = lambda *args, **kwargs: lambda func: func  # No-op decorator
+
 # Configuration
 API_URL = "http://localhost:1234/v1/chat/completions"
 MODEL_NAME = "meta-llama-3.1-8b-instruct"  # Actual model name for API
-COACH_DIR = Path.home() / "gtd-coach"
+# Handle Docker vs local paths
+if os.environ.get("IN_DOCKER"):
+    COACH_DIR = Path("/app")
+else:
+    COACH_DIR = Path.home() / "gtd-coach"
+
 PROMPTS_DIR = COACH_DIR / "prompts"
 DATA_DIR = COACH_DIR / "data" 
 LOGS_DIR = COACH_DIR / "logs"
@@ -38,6 +52,10 @@ class GTDCoach:
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.setup_logging()
         
+        # Create event loop for async tasks
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        
         self.messages = []
         self.review_start_time = None
         self.review_data = {
@@ -51,6 +69,18 @@ class GTDCoach:
         self.memory = GraphitiMemory(self.session_id)
         self.pattern_detector = ADHDPatternDetector()
         self.current_phase = "STARTUP"
+        
+        # Initialize Langfuse client if available
+        self.langfuse_enabled = False
+        self.langfuse_client = None
+        if LANGFUSE_AVAILABLE and validate_configuration():
+            try:
+                self.langfuse_client = get_langfuse_client()
+                self.langfuse_enabled = True
+                self.logger.info("Langfuse observability enabled")
+            except Exception as e:
+                self.logger.warning(f"Langfuse initialization failed: {e}")
+                self.langfuse_enabled = False
         
         # Phase-specific settings for optimal LLM performance
         self.phase_settings = {
@@ -133,6 +163,7 @@ class GTDCoach:
         timer_script = SCRIPTS_DIR / "timer.sh"
         subprocess.Popen([str(timer_script), str(minutes), message])
     
+    @observe(name="llm_call", as_type="generation")
     def send_message(self, content, save_to_history=True, phase_name=None):
         """Send a message to the LLM and get response with enhanced retry logic"""
         self.logger.info(f"Sending message to LLM - Phase: {phase_name or 'None'}, Content length: {len(content)} chars")
@@ -143,7 +174,7 @@ class GTDCoach:
         if save_to_history:
             self.messages.append({"role": "user", "content": content})
             # Record user interaction in memory
-            asyncio.create_task(
+            self.loop.create_task(
                 self.memory.add_interaction(
                     role="user",
                     content=content,
@@ -166,15 +197,43 @@ class GTDCoach:
                 # Use current messages for this attempt
                 current_messages = self.messages.copy()
                 
-                response = session.post(API_URL, json={
-                    "model": MODEL_NAME,
-                    "messages": current_messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens
-                }, timeout=30)
-                
-                response.raise_for_status()
-                assistant_message = response.json()['choices'][0]['message']['content']
+                # Use Langfuse client if available, otherwise fall back to direct API
+                if self.langfuse_enabled and self.langfuse_client:
+                    try:
+                        completion = self.langfuse_client.chat.completions.create(
+                            model=MODEL_NAME,
+                            messages=current_messages,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            name=f"{phase_name or 'general'}_interaction",
+                            metadata={
+                                "phase": self.current_phase,
+                                "attempt": attempt + 1,
+                                "session_id": self.session_id
+                            }
+                        )
+                        assistant_message = completion.choices[0].message.content
+                    except Exception as e:
+                        self.logger.warning(f"Langfuse call failed, falling back to direct API: {e}")
+                        # Fall back to direct API
+                        response = session.post(API_URL, json={
+                            "model": MODEL_NAME,
+                            "messages": current_messages,
+                            "temperature": temperature,
+                            "max_tokens": max_tokens
+                        }, timeout=30)
+                        response.raise_for_status()
+                        assistant_message = response.json()['choices'][0]['message']['content']
+                else:
+                    # Direct API call
+                    response = session.post(API_URL, json={
+                        "model": MODEL_NAME,
+                        "messages": current_messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens
+                    }, timeout=30)
+                    response.raise_for_status()
+                    assistant_message = response.json()['choices'][0]['message']['content']
                 
                 if save_to_history:
                     self.messages.append({"role": "assistant", "content": assistant_message})
@@ -183,7 +242,7 @@ class GTDCoach:
                     response_time = time.time() - message_start_time
                     
                     # Record assistant response in memory
-                    asyncio.create_task(
+                    self.loop.create_task(
                         self.memory.add_interaction(
                             role="assistant",
                             content=assistant_message,
@@ -197,6 +256,12 @@ class GTDCoach:
                     )
                 
                 self.logger.info(f"LLM response received - Length: {len(assistant_message)} chars")
+                
+                # Score the response if Langfuse is enabled
+                if self.langfuse_enabled and LANGFUSE_AVAILABLE:
+                    response_time = time.time() - message_start_time
+                    score_response(self.current_phase, True, response_time)
+                
                 return assistant_message
                 
             except requests.exceptions.Timeout:
@@ -246,7 +311,18 @@ class GTDCoach:
                 else:
                     self.logger.error("All retry attempts exhausted")
                     print("Make sure LM Studio server is running (lms server start)")
+                    
+                    # Score the failure if Langfuse is enabled
+                    if self.langfuse_enabled and LANGFUSE_AVAILABLE:
+                        response_time = time.time() - message_start_time
+                        score_response(self.current_phase, False, response_time)
+                    
                     return None
+        
+        # Score the failure if we got here
+        if self.langfuse_enabled and LANGFUSE_AVAILABLE:
+            response_time = time.time() - message_start_time
+            score_response(self.current_phase, False, response_time)
         
         return None
     
@@ -258,7 +334,7 @@ class GTDCoach:
         
         # Record phase start in memory
         self.current_phase = phase_name.upper().replace(" ", "_")
-        asyncio.create_task(self.memory.add_phase_transition(phase_name, "start"))
+        self.loop.create_task(self.memory.add_phase_transition(phase_name, "start"))
         
         return phase_start
     
@@ -270,8 +346,8 @@ class GTDCoach:
         print(f"\n✓ {phase_name} completed in {duration/60:.1f} minutes")
         
         # Record phase end and flush episodes
-        asyncio.create_task(self.memory.add_phase_transition(phase_name, "end", duration))
-        asyncio.create_task(self.memory.flush_episodes())
+        self.loop.create_task(self.memory.add_phase_transition(phase_name, "end", duration))
+        self.loop.create_task(self.memory.flush_episodes())
     
     def run_startup_phase(self):
         """1. STARTUP PHASE (2 min)"""
@@ -360,7 +436,7 @@ class GTDCoach:
                     )
                     
                     if switch_data:
-                        asyncio.create_task(
+                        self.loop.create_task(
                             self.memory.add_behavior_pattern(
                                 pattern_type="task_switch",
                                 phase="MIND_SWEEP",
@@ -472,13 +548,13 @@ Please help me quickly process and organize these items. Stay within the Mind Sw
         }
         
         # Add mindsweep data to memory with pattern analysis
-        asyncio.create_task(
+        self.loop.create_task(
             self.memory.add_mindsweep_batch(final_items, phase_metrics)
         )
         
         # Log coherence patterns if concerning
         if coherence_analysis['coherence_score'] < 0.5:
-            asyncio.create_task(
+            self.loop.create_task(
                 self.memory.add_behavior_pattern(
                     pattern_type="low_coherence",
                     phase="MIND_SWEEP",
@@ -659,7 +735,12 @@ Items captured: {self.review_data['items_captured']}"""
             json.dump(validated_data, f, indent=2)
         
         # Create session summary in memory
-        asyncio.create_task(self.memory.create_session_summary(self.review_data))
+        self.loop.create_task(self.memory.create_session_summary(self.review_data))
+        
+        # Run all pending async tasks before saving
+        pending = [task for task in asyncio.all_tasks(self.loop) if not task.done()]
+        if pending:
+            self.loop.run_until_complete(asyncio.gather(*pending))
         
         self.logger.info(f"Saved complete review log to {filepath.name}")
         self.logger.info(f"Session summary: {self.review_data}")

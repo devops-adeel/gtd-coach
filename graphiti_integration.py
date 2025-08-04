@@ -7,11 +7,19 @@ Handles async communication with Graphiti MCP server for memory persistence
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Handle Docker vs local paths
+def get_base_dir():
+    if os.environ.get("IN_DOCKER"):
+        return Path("/app")
+    else:
+        return Path.home() / "gtd-coach"
 
 
 class GraphitiMemory:
@@ -143,7 +151,7 @@ class GraphitiMemory:
         
         # Note: In actual implementation, this would use the MCP tools
         # For now, we'll save to a temporary file that can be processed
-        temp_file = Path.home() / "gtd-coach" / "data" / f"graphiti_batch_{self.session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        temp_file = get_base_dir() / "data" / f"graphiti_batch_{self.session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         
         try:
             with open(temp_file, 'w') as f:

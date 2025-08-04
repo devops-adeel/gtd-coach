@@ -44,6 +44,7 @@ TEST COMMANDS
 Timer test:     ~/gtd-coach/scripts/timer.sh 1 "Test done!"
 Connection:     python3 ~/gtd-coach/test-simple-prompt.py
 Demo review:    python3 ~/gtd-coach/demo-review.py
+Langfuse:       python3 ~/gtd-coach/test_langfuse.py
 
 TIPS FOR SUCCESS
 ----------------

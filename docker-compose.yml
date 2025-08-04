@@ -1,0 +1,61 @@
+services:
+  gtd-coach:
+    build: .
+    image: gtd-coach:latest
+    container_name: gtd-coach
+    # Use host networking to access LM Studio and Langfuse on localhost
+    network_mode: host
+    # Mount volumes for data persistence
+    volumes:
+      # Mount data directory for persistence
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./summaries:/app/summaries
+      # Mount the Python files for live editing (development)
+      - ./gtd-review.py:/app/gtd-review.py:ro
+      - ./langfuse_tracker.py:/app/langfuse_tracker.py:ro
+      - ./graphiti_integration.py:/app/graphiti_integration.py:ro
+      - ./adhd_patterns.py:/app/adhd_patterns.py:ro
+      - ./generate_summary.py:/app/generate_summary.py:ro
+      - ./test_langfuse.py:/app/test_langfuse.py:ro
+      # Mount prompts for easy editing
+      - ./prompts:/app/prompts:ro
+    environment:
+      # Pass through terminal for interactive sessions
+      - TERM=xterm-256color
+      # Indicate we're in Docker (for disabling audio if needed)
+      - IN_DOCKER=true
+      # Python unbuffered output
+      - PYTHONUNBUFFERED=1
+    # Keep stdin open and allocate pseudo-TTY for interactive mode
+    stdin_open: true
+    tty: true
+
+  # Utility service for running tests
+  test-langfuse:
+    build: .
+    image: gtd-coach:latest
+    container_name: gtd-coach-test
+    network_mode: host
+    volumes:
+      - ./langfuse_tracker.py:/app/langfuse_tracker.py:ro
+      - ./test_langfuse.py:/app/test_langfuse.py:ro
+    command: python3 test_langfuse.py
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # Utility service for generating summaries
+  generate-summary:
+    build: .
+    image: gtd-coach:latest
+    container_name: gtd-coach-summary
+    network_mode: host
+    volumes:
+      - ./data:/app/data:ro
+      - ./summaries:/app/summaries
+      - ./generate_summary.py:/app/generate_summary.py:ro
+      - ./graphiti_integration.py:/app/graphiti_integration.py:ro
+      - ./adhd_patterns.py:/app/adhd_patterns.py:ro
+    command: python3 generate_summary.py
+    environment:
+      - PYTHONUNBUFFERED=1

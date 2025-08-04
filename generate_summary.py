@@ -7,6 +7,7 @@ Analyzes GTD review patterns and provides ADHD insights
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any
@@ -16,6 +17,13 @@ from graphiti_integration import GraphitiRetriever
 from adhd_patterns import ADHDPatternDetector
 
 logger = logging.getLogger(__name__)
+
+# Handle Docker vs local paths
+def get_base_dir():
+    if os.environ.get("IN_DOCKER"):
+        return Path("/app")
+    else:
+        return Path.home() / "gtd-coach"
 
 
 class WeeklySummaryGenerator:
@@ -78,8 +86,8 @@ class WeeklySummaryGenerator:
         """Gather session data from file system (temporary until MCP integration)"""
         # TODO: Replace with GraphitiRetriever.get_recent_sessions() when MCP is ready
         
-        data_dir = Path.home() / "gtd-coach" / "data"
-        logs_dir = Path.home() / "gtd-coach" / "logs"
+        data_dir = get_base_dir() / "data"
+        logs_dir = get_base_dir() / "logs"
         
         # Get recent review logs
         cutoff_date = datetime.now() - timedelta(days=days)
@@ -105,7 +113,7 @@ class WeeklySummaryGenerator:
         """Analyze behavioral patterns from Graphiti batch files"""
         # TODO: Replace with GraphitiRetriever.search_patterns() when MCP is ready
         
-        data_dir = Path.home() / "gtd-coach" / "data"
+        data_dir = get_base_dir() / "data"
         cutoff_date = datetime.now() - timedelta(days=days)
         
         # Load Graphiti batch files
@@ -134,7 +142,7 @@ class WeeklySummaryGenerator:
         """Analyze mindsweep trends from saved data"""
         # TODO: Replace with GraphitiRetriever.get_mindsweep_trends() when MCP is ready
         
-        data_dir = Path.home() / "gtd-coach" / "data"
+        data_dir = get_base_dir() / "data"
         cutoff_date = datetime.now() - timedelta(days=days)
         
         all_items = []
@@ -398,7 +406,7 @@ async def main():
     summary = await generator.generate_summary(days=7)
     
     # Save to file
-    output_dir = Path.home() / "gtd-coach" / "summaries"
+    output_dir = get_base_dir() / "summaries"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

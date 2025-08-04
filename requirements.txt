@@ -1,0 +1,8 @@
+# GTD Coach Dependencies
+
+# Core dependencies
+requests  # For LM Studio API calls
+asyncio   # Built-in, for async operations
+
+# Optional integrations
+langfuse[openai]>=2.0.0  # LLM observability with OpenAI integration (optional)

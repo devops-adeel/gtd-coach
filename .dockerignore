@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv
+
+# Data directories (will be mounted as volumes)
+data/
+logs/
+summaries/
+
+# Documentation
+*.md
+QUICK_REFERENCE.txt
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
+docker-run.sh
+
+# Test outputs
+test_*.json
+
+# macOS
+.DS_Store

@@ -32,14 +32,20 @@ while [ $ELAPSED -lt $SECONDS ]; do
     # Show warnings at key intervals
     if [ $PERCENT -eq 50 ] && [ $((ELAPSED % INTERVAL)) -eq 0 ]; then
         echo "⚠️  50% time remaining: ${REMAINING_MIN}m ${REMAINING_SEC}s"
-        # Play sound for macOS
-        afplay /System/Library/Sounds/Tink.aiff 2>/dev/null || true
+        # Play sound for macOS (skip if in Docker)
+        if [ -z "$IN_DOCKER" ]; then
+            afplay /System/Library/Sounds/Tink.aiff 2>/dev/null || true
+        fi
     elif [ $PERCENT -eq 80 ] && [ $((ELAPSED % INTERVAL)) -eq 0 ]; then
         echo "⚠️  20% time remaining: ${REMAINING_MIN}m ${REMAINING_SEC}s"
-        afplay /System/Library/Sounds/Tink.aiff 2>/dev/null || true
+        if [ -z "$IN_DOCKER" ]; then
+            afplay /System/Library/Sounds/Tink.aiff 2>/dev/null || true
+        fi
     elif [ $PERCENT -eq 90 ] && [ $((ELAPSED % INTERVAL)) -eq 0 ]; then
         echo "🚨 10% time remaining: ${REMAINING_MIN}m ${REMAINING_SEC}s"
-        afplay /System/Library/Sounds/Purr.aiff 2>/dev/null || true
+        if [ -z "$IN_DOCKER" ]; then
+            afplay /System/Library/Sounds/Purr.aiff 2>/dev/null || true
+        fi
     fi
     
     sleep 1
@@ -51,7 +57,9 @@ echo "🔔 $MESSAGE"
 echo "Ended at: $(date '+%H:%M:%S')"
 
 # Play completion sound
-afplay /System/Library/Sounds/Glass.aiff 2>/dev/null || true
+if [ -z "$IN_DOCKER" ]; then
+    afplay /System/Library/Sounds/Glass.aiff 2>/dev/null || true
+fi
 
 # If running from another script, return 0
 exit 0

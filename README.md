@@ -15,6 +15,49 @@ python3 ~/gtd-coach/gtd-review.py
 python3 ~/gtd-coach/generate_summary.py
 ```
 
+## Installation
+
+### Core Requirements
+- Python 3.8+
+- LM Studio with Llama 3.1 8B model
+- macOS (for audio alerts)
+
+### Optional Dependencies
+```bash
+# Install optional Langfuse for LLM performance tracking
+pip install -r requirements.txt
+```
+
+## Docker/OrbStack Installation (Recommended)
+
+If you encounter "externally managed environment" errors, use the Docker/OrbStack setup:
+
+### Prerequisites
+- [OrbStack](https://orbstack.dev/) or Docker Desktop
+- LM Studio running on localhost:1234
+- (Optional) Langfuse running on localhost:3000
+
+### Quick Start with Docker
+```bash
+# Run the weekly review
+./docker-run.sh
+
+# Test Langfuse integration
+./docker-run.sh test
+
+# Generate weekly summary
+./docker-run.sh summary
+
+# Build/rebuild the image
+./docker-run.sh build
+```
+
+The Docker setup:
+- ✅ Avoids Python environment issues
+- ✅ Uses host networking to connect to LM Studio and Langfuse
+- ✅ Preserves all your data in local directories
+- ✅ Handles audio alerts gracefully (disabled in container)
+
 ## Features
 
 - **Strict 30-minute time limit** with phase-based structure
@@ -95,6 +138,50 @@ ls ~/gtd-coach/summaries/
 
 All tracking happens automatically in the background without impacting your review performance.
 
+## LLM Performance Monitoring (Langfuse)
+
+The GTD Coach now includes optional Langfuse integration for tracking LLM performance:
+
+### What Gets Tracked
+
+- **Response Latency**: Time taken for each LLM response per phase
+- **Success/Failure Rates**: Track reliability and retry patterns
+- **Quality Scores**: Phase-specific response quality based on latency thresholds
+
+### Setup Langfuse Integration
+
+1. **Run Langfuse locally** (if using self-hosted):
+   ```bash
+   # With Docker/OrbStack
+   docker run -p 3000:3000 langfuse/langfuse
+   ```
+
+2. **Configure your keys** in `langfuse_tracker.py`:
+   ```python
+   LANGFUSE_PUBLIC_KEY = "pk-lf-your-key-here"
+   LANGFUSE_SECRET_KEY = "sk-lf-your-key-here"
+   ```
+
+3. **Test the integration**:
+   ```bash
+   python3 ~/gtd-coach/test_langfuse.py
+   ```
+
+4. **Start your review** - Langfuse tracking is automatic when configured:
+   ```bash
+   ~/gtd-coach/start-coach.sh
+   ```
+
+### Viewing Performance Data
+
+Access your Langfuse UI at http://localhost:3000 to see:
+- Session traces with nested phases
+- Latency breakdowns per interaction
+- Success/failure patterns
+- Quality score trends
+
+The integration gracefully falls back to direct API calls if Langfuse is unavailable.
+
 ## Manual Timer Usage
 
 ```bash
@@ -139,6 +226,8 @@ lms ps
 - **[SETUP_COMPLETE.md](SETUP_COMPLETE.md)** - Setup confirmation and next steps
 - **[KNOWN_ISSUES.md](KNOWN_ISSUES.md)** - Troubleshooting guide
 - **[GRAPHITI_INTEGRATION.md](GRAPHITI_INTEGRATION.md)** - Technical details of memory integration
+- **[LANGFUSE_INTEGRATION.md](LANGFUSE_INTEGRATION.md)** - LLM performance monitoring setup
+- **[DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)** - Docker/OrbStack deployment guide
 
 ## Recent Enhancements (August 2025)
 
@@ -150,6 +239,7 @@ lms ps
 - **Connection Pooling**: Better performance through HTTP keep-alive connections
 - **Graphiti Memory Integration**: Automatic pattern tracking, ADHD behavior detection, and weekly summaries
 - **ADHD Pattern Detection**: Research-based algorithms for task switching and focus analysis
+- **Langfuse Observability**: LLM performance tracking with latency monitoring and quality scoring
 
 See [KNOWN_ISSUES.md](KNOWN_ISSUES.md#recent-enhancements-august-2025) for details.
 

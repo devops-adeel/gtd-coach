@@ -37,6 +37,26 @@ else
     fi
 fi
 
+# Check Langfuse connectivity (optional)
+echo -e "\nChecking Langfuse observability..."
+if [ -n "$LANGFUSE_HOST" ]; then
+    # Use environment variable if set
+    LANGFUSE_URL="$LANGFUSE_HOST"
+else
+    # Default to local instance
+    LANGFUSE_URL="http://localhost:3000"
+fi
+
+# Try to reach Langfuse health endpoint
+if curl -s --connect-timeout 2 "$LANGFUSE_URL/api/public/health" > /dev/null 2>&1; then
+    echo "✓ Langfuse is accessible at $LANGFUSE_URL"
+    echo "  Performance tracking will be enabled"
+else
+    echo "⚠️  Langfuse not accessible at $LANGFUSE_URL"
+    echo "  Continuing without performance tracking"
+    echo "  To enable: ensure Langfuse is running and update langfuse_tracker.py with your keys"
+fi
+
 echo -e "\n✅ GTD Coach is ready!"
 echo "===================="
 echo ""
