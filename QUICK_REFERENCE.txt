@@ -1,9 +1,12 @@
 GTD COACH QUICK REFERENCE
 ========================
-Now with automatic memory tracking & pattern detection!
+Now with automatic memory tracking, pattern detection & LLM performance monitoring!
 
-START YOUR REVIEW
+START YOUR REVIEW (Native Python)
 $ ~/gtd-coach/start-coach.sh
+
+START YOUR REVIEW (Docker - Recommended)
+$ ./docker-run.sh
 
 REVIEW PHASES (30 minutes)
 --------------------------
@@ -39,12 +42,26 @@ Your data saved in:
 View weekly insights:
 $ python3 ~/gtd-coach/generate_summary.py
 
-TEST COMMANDS
--------------
+DOCKER COMMANDS (If using Docker)
+---------------------------------
+Build image:    ./docker-run.sh build
+Run review:     ./docker-run.sh
+Test Langfuse:  ./docker-run.sh test
+Weekly summary: ./docker-run.sh summary
+
+TEST COMMANDS (Native Python)
+-----------------------------
 Timer test:     ~/gtd-coach/scripts/timer.sh 1 "Test done!"
 Connection:     python3 ~/gtd-coach/test-simple-prompt.py
 Demo review:    python3 ~/gtd-coach/demo-review.py
 Langfuse:       python3 ~/gtd-coach/test_langfuse.py
+
+LANGFUSE SETUP (Optional)
+-------------------------
+1. Copy config: cp langfuse_tracker.py.example langfuse_tracker.py
+2. Add your keys to langfuse_tracker.py
+3. Test: ./docker-run.sh test (or python3 test_langfuse.py)
+4. View metrics at http://localhost:3000
 
 TIPS FOR SUCCESS
 ----------------

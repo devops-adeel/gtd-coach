@@ -16,7 +16,11 @@ Since your Python environment is externally managed, we've containerized the GTD
 1. **OrbStack or Docker Desktop** installed and running
 2. **LM Studio** running on localhost:1234 with Llama 3.1 8B model loaded
 3. **Langfuse** running on localhost:3000 (self-hosted)
-4. **Updated keys** in `langfuse_tracker.py` (✅ You've already done this)
+4. **Configure your keys**:
+   ```bash
+   cp langfuse_tracker.py.example langfuse_tracker.py
+   # Edit langfuse_tracker.py with your actual keys
+   ```
 
 ### Quick Start
 
@@ -98,7 +102,11 @@ Docker Container
 ### "Cannot connect to Langfuse"
 - Ensure Langfuse is running on localhost:3000
 - Check if you can access http://localhost:3000 in browser
-- Verify keys are correct in `langfuse_tracker.py`
+- Verify you've copied and configured `langfuse_tracker.py`:
+  ```bash
+  cp langfuse_tracker.py.example langfuse_tracker.py
+  # Edit with your actual keys
+  ```
 
 ### "LM Studio not found"
 - Start LM Studio server: `lms server start`

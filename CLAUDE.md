@@ -187,11 +187,13 @@ The integration uses Langfuse's drop-in OpenAI replacement:
 4. Preserves all existing retry and error handling logic
 
 ### Configuration
-Update `langfuse_tracker.py` with your Langfuse instance details:
-```python
-LANGFUSE_HOST = "http://localhost:3000"  # Your Langfuse URL
-LANGFUSE_PUBLIC_KEY = "pk-lf-..."       # Your public key
-LANGFUSE_SECRET_KEY = "sk-lf-..."       # Your secret key
+Configure Langfuse by copying the example file and adding your keys:
+```bash
+cp langfuse_tracker.py.example langfuse_tracker.py
+# Edit langfuse_tracker.py with your instance details:
+# - LANGFUSE_HOST = "http://localhost:3000"
+# - LANGFUSE_PUBLIC_KEY = "pk-lf-..."  # Your public key
+# - LANGFUSE_SECRET_KEY = "sk-lf-..."  # Your secret key
 ```
 
 ## Future Enhancement Opportunities

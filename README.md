@@ -18,27 +18,24 @@ python3 ~/gtd-coach/generate_summary.py
 ## Installation
 
 ### Core Requirements
-- Python 3.8+
 - LM Studio with Llama 3.1 8B model
-- macOS (for audio alerts)
+- macOS (for audio alerts with native Python)
+- Python 3.8+ (for native installation) OR Docker/OrbStack (recommended)
 
-### Optional Dependencies
-```bash
-# Install optional Langfuse for LLM performance tracking
-pip install -r requirements.txt
-```
+### Installation Methods
 
-## Docker/OrbStack Installation (Recommended)
+#### Method 1: Docker/OrbStack (Recommended)
+Use this method to avoid Python environment issues:
 
-If you encounter "externally managed environment" errors, use the Docker/OrbStack setup:
-
-### Prerequisites
+**Prerequisites:**
 - [OrbStack](https://orbstack.dev/) or Docker Desktop
 - LM Studio running on localhost:1234
 - (Optional) Langfuse running on localhost:3000
 
-### Quick Start with Docker
 ```bash
+# First-time setup: build the Docker image
+./docker-run.sh build
+
 # Run the weekly review
 ./docker-run.sh
 
@@ -47,16 +44,28 @@ If you encounter "externally managed environment" errors, use the Docker/OrbStac
 
 # Generate weekly summary
 ./docker-run.sh summary
-
-# Build/rebuild the image
-./docker-run.sh build
 ```
 
-The Docker setup:
-- ✅ Avoids Python environment issues
+**Benefits:**
+- ✅ Avoids "externally managed environment" Python errors
 - ✅ Uses host networking to connect to LM Studio and Langfuse
 - ✅ Preserves all your data in local directories
 - ✅ Handles audio alerts gracefully (disabled in container)
+
+#### Method 2: Native Python Installation
+If you have a properly configured Python environment:
+
+```bash
+# Clone the repository
+git clone https://github.com/devops-adeel/gtd-coach.git
+cd gtd-coach
+
+# Install dependencies (optional, for Langfuse support)
+pip install -r requirements.txt
+
+# Run directly
+python3 gtd-review.py
+```
 
 ## Features
 
@@ -156,20 +165,31 @@ The GTD Coach now includes optional Langfuse integration for tracking LLM perfor
    docker run -p 3000:3000 langfuse/langfuse
    ```
 
-2. **Configure your keys** in `langfuse_tracker.py`:
-   ```python
-   LANGFUSE_PUBLIC_KEY = "pk-lf-your-key-here"
-   LANGFUSE_SECRET_KEY = "sk-lf-your-key-here"
+2. **Configure your keys**:
+   ```bash
+   # Copy the example file
+   cp langfuse_tracker.py.example langfuse_tracker.py
+   
+   # Edit with your actual keys
+   # Replace pk-lf-... and sk-lf-... with your actual keys
    ```
 
 3. **Test the integration**:
    ```bash
+   # Native Python
    python3 ~/gtd-coach/test_langfuse.py
+   
+   # Or with Docker
+   ./docker-run.sh test
    ```
 
 4. **Start your review** - Langfuse tracking is automatic when configured:
    ```bash
+   # Native Python
    ~/gtd-coach/start-coach.sh
+   
+   # Or with Docker
+   ./docker-run.sh
    ```
 
 ### Viewing Performance Data
