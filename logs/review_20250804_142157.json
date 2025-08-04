@@ -1,0 +1,34 @@
+{
+  "timestamp": "20250804_142157",
+  "session_id": "20250804_141824",
+  "review_data": {
+    "projects_reviewed": 0,
+    "decisions_made": 0,
+    "items_captured": 5,
+    "phase_durations": {
+      "Startup": 8.199526309967041
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Start the weekly review process."
+    },
+    {
+      "role": "assistant",
+      "content": "**Startup (2 minutes)**\n\nLet's get started with our weekly review! \n\nHi, how are you feeling today? Are you ready to dive into our review and tackle your tasks for the week?\n\nWe have 30 minutes scheduled for this review. Let's make the most of it.\n\nTime remaining: 28 minutes\n\n**Transitioning to Mind Sweep (10 minutes)**\n\nNow that we're settled in, let's begin with capturing everything on your mind. This is a non-judgmental space \u2013 don't worry about prioritizing or organizing yet; just focus on getting everything out.\n\nTake a deep breath and start sharing anything that comes to mind: tasks, projects, appointments, reminders, ideas... whatever you need to get off your chest. I'll help facilitate the process and keep us on track.\n\nTime remaining in Mind Sweep: 9 minutes\n\nWhat's the first thing on your mind?"
+    },
+    {
+      "role": "user",
+      "content": "I captured 5 items during mind sweep."
+    },
+    {
+      "role": "assistant",
+      "content": "**Transitioning from Mind Sweep (10 minutes) to Project Review (12 minutes)**\n\nNow that we've got everything captured, let's quickly review these 5 items and identify potential next actions for each.\n\nWe have 12 minutes for this phase. Remember, our goal is to make fast decisions about what needs to be done next, not to perfect the plans just yet.\n\nLet's go through each item together:\n\n1. Item 1\n2. Item 2\n3. Item 3\n4. Item 4\n5. Item 5\n\nFor each one, can you tell me: What's the smallest step I could take next? Is it a call, an email, or something else?\n\nTime remaining in Project Review: 10 minutes"
+    },
+    {
+      "role": "user",
+      "content": "Mind sweep complete! Processed 5 items."
+    }
+  ]
+}

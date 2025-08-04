@@ -80,30 +80,43 @@ You: [Just press Enter or type a brief acknowledgment]
 
 ### Phase 2: MIND SWEEP (10 minutes)
 **What happens:**
-- 5 minutes for brain dump
-- 5 minutes for coach processing
+- Phase A: 5 minutes for brain dump (capture)
+- Phase B: 5 minutes for quick processing
+- Visual progress indicators every minute
 - Audio alert at 1 minute remaining
 
-**Your role:**
+**Phase A - Capture (5 minutes):**
 - Type everything on your mind, one item per line
 - Don't edit or judge - just dump
 - Include personal and professional items
 - Press Enter after each item
+- Empty line offers early exit option
 
-**Example items:**
+**Example capture:**
 ```
 > finish project report
 > call dentist
 > mom's birthday gift
 > fix leaky faucet
 > review team proposals
-> [press Enter with empty line when done]
+> [press Enter with empty line]
+Finish capture early? (y/n): y
+✓ Moving to processing phase...
 ```
 
-**Coach response:**
-- Acknowledges number of items
-- May flag if list seems too long/short
-- Provides encouragement
+**Progress indicators:**
+- Every minute: "⏱️ X minutes elapsed, Y minutes remaining"
+- At 4 minutes: "⚠️ 1 minute remaining for capture!"
+- At 5 minutes: "⏰ Capture time complete! Press Enter to continue..."
+
+**Phase B - Process (5 minutes):**
+- Coach acknowledges number of items
+- If >15 items: Quick prioritization
+  - Lists all items with numbers
+  - You select top 10-15 (e.g., "1,3,5,7,9")
+- Opportunity for quick clarifications
+  - Type: "3 - needs to call by Friday"
+- Coach provides encouragement
 
 ### Phase 3: PROJECT REVIEW (12 minutes)
 **What happens:**

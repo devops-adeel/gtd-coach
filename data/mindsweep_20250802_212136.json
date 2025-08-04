@@ -1,0 +1,16 @@
+{
+  "timestamp": "20250802_212136",
+  "items": [
+    "Get started on the BOM materials for Agentic AuthZ",
+    "Schedule a kick-off with the SMEs to mobilise them on producing BOM",
+    "Get Simon to validate snowflake secrets engine and kv-based api-key",
+    "Get Andy-SE for Juniper to tailor deck for customer.",
+    "Look into transferring todoist items into here.",
+    "Connect home-server to monitor and keyboard",
+    "get ssh connectivity to the home server",
+    "get claude-code to capture hardware information",
+    "figure out trade-in for mac-mini",
+    "use claude-code to integrate this gtd-coach with graphiti memory"
+  ],
+  "count": 10
+}

@@ -1,0 +1,7 @@
+2025-08-04 14:40:21,242 - GTDCoach.20250804_144021 - INFO - GTD Coach session started - ID: 20250804_144021
+2025-08-04 14:40:21,242 - GTDCoach.20250804_144021 - INFO - Loaded simple system prompt
+2025-08-04 14:40:21,242 - GTDCoach.20250804_144021 - INFO - System prompt loaded, length: 838 chars
+2025-08-04 14:40:21,244 - GTDCoach.20250804_144021 - INFO - Starting phase: Mind Sweep (10 minutes)
+2025-08-04 14:40:21,245 - GTDCoach.20250804_144021 - INFO - Starting phase: Mind Sweep (10 minutes)
+2025-08-04 14:40:21,245 - GTDCoach.20250804_144021 - INFO - Sending message to LLM - Phase: MIND_SWEEP, Content length: 395 chars
+2025-08-04 14:40:28,972 - GTDCoach.20250804_144021 - INFO - LLM response received - Length: 664 chars

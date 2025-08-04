@@ -1,0 +1,15 @@
+2025-08-04 13:45:46,173 - GTDCoach.20250804_134546 - INFO - GTD Coach session started - ID: 20250804_134546
+2025-08-04 13:45:46,174 - GTDCoach.20250804_134546 - INFO - Loaded simple system prompt
+2025-08-04 13:45:46,174 - GTDCoach.20250804_134546 - INFO - System prompt loaded, length: 838 chars
+2025-08-04 13:45:46,178 - GTDCoach.20250804_134546 - INFO - Starting phase: Startup (2 minutes)
+2025-08-04 13:45:46,178 - GTDCoach.20250804_134546 - INFO - Sending message to LLM - Phase: STARTUP, Content length: 32 chars
+2025-08-04 13:45:53,000 - GTDCoach.20250804_134546 - INFO - LLM response received - Length: 601 chars
+2025-08-04 13:45:53,000 - GTDCoach.20250804_134546 - INFO - Phase completed: Startup - Duration: 0.1 minutes
+2025-08-04 13:45:53,003 - GTDCoach.20250804_134546 - INFO - Starting phase: Mind Sweep (10 minutes)
+2025-08-04 13:51:23,705 - GTDCoach.20250804_134546 - INFO - Sending message to LLM - Phase: MIND_SWEEP, Content length: 37 chars
+2025-08-04 13:51:28,326 - GTDCoach.20250804_134546 - INFO - LLM response received - Length: 409 chars
+2025-08-04 13:51:28,327 - GTDCoach.20250804_134546 - INFO - Saved 4 mindsweep items to mindsweep_20250804_135128.json
+2025-08-04 13:51:28,327 - GTDCoach.20250804_134546 - INFO - Phase completed: Mind Sweep - Duration: 5.6 minutes
+2025-08-04 13:51:28,328 - GTDCoach.20250804_134546 - INFO - Starting phase: Project Review (12 minutes)
+2025-08-04 13:55:21,419 - GTDCoach.20250804_134546 - INFO - Saved complete review log to review_20250804_135521.json
+2025-08-04 13:55:21,420 - GTDCoach.20250804_134546 - INFO - Session summary: {'projects_reviewed': 0, 'decisions_made': 0, 'items_captured': 4, 'phase_durations': {'Startup': 6.826054811477661, 'Mind Sweep': 335.32666182518005}}

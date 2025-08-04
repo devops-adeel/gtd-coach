@@ -38,7 +38,7 @@ else
 fi
 
 echo -e "\n✅ GTD Coach is ready!"
-echo "====================
+echo "===================="
 echo ""
 echo "To start your weekly review, run:"
 echo "  python3 ~/gtd-coach/gtd-review.py"
@@ -51,7 +51,9 @@ echo "Models loaded:"
 lms ps
 
 # Optional: Launch the review immediately
-read -p "Start weekly review now? (y/n) " -n 1 -r
+echo ""
+echo -n "Start weekly review now? (y/n) "
+read -n 1 REPLY
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     cd ~/gtd-coach

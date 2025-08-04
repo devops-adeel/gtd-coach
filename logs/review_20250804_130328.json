@@ -1,0 +1,30 @@
+{
+  "timestamp": "20250804_130328",
+  "review_data": {
+    "projects_reviewed": 1,
+    "decisions_made": 1,
+    "items_captured": 7,
+    "phase_durations": {
+      "Startup": 9.353047132492065,
+      "Mind Sweep": 503.18329906463623
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Start the weekly review process."
+    },
+    {
+      "role": "assistant",
+      "content": "Let's get started with your weekly review.\n\n**STARTUP (2 minutes)**\n\nHello! Are you ready to dive into our weekly review? Take a deep breath, and let's begin. We'll work together to clear your mind, make progress on projects, and set yourself up for success in the coming week.\n\nYou have 30 minutes for this review. Let's get started!\n\n**Current Time:** 0 minutes\n\nWe're about to move into the MIND SWEEP phase. This is where we capture everything that's been on your mind lately. Please take a moment to think about your tasks, projects, and any other concerns you'd like to address.\n\nRemember, this is just a quick scan of your mental landscape. We'll focus on making progress, not perfection.\n\nLet's begin the MIND SWEEP phase. You have 10 minutes for this part.\n\n**Time Remaining:** 10 minutes\n\nPlease start sharing what's been on your mind lately."
+    },
+    {
+      "role": "user",
+      "content": "I captured 7 items during mind sweep."
+    },
+    {
+      "role": "assistant",
+      "content": "You've completed the MIND SWEEP phase with 7 items to review. That's a great start!\n\n**Current Time:** 12 minutes (including startup)\n\nNow, let's move into the PROJECT REVIEW phase. We'll quickly go through each item you captured and make decisions on next actions.\n\nPlease take a moment to look at your 7 items. For each one, ask yourself:\n\n* What's the next action I need to take?\n* Is this action actionable today or in the near future?\n\nWe'll limit our discussion to just the next action for each item. Don't worry about details or perfection \u2013 we're focusing on progress.\n\nYou have 12 minutes for this phase.\n\n**Time Remaining:** 12 minutes\n\nLet's begin reviewing your items one by one. Which one would you like to start with?"
+    }
+  ]
+}

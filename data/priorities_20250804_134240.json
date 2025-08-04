@@ -1,0 +1,13 @@
+{
+  "timestamp": "20250804_134240",
+  "priorities": [
+    {
+      "action": "Test action 1",
+      "priority": "A"
+    },
+    {
+      "action": "Test action 2",
+      "priority": "B"
+    }
+  ]
+}

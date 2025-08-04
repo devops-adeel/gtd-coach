@@ -1,0 +1,20 @@
+{
+  "timestamp": "20250804_134240",
+  "session_id": "20250804_134238",
+  "review_data": {
+    "projects_reviewed": 0,
+    "decisions_made": 0,
+    "items_captured": 0,
+    "phase_durations": {}
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Say 'Hello, test successful!' in 5 words or less."
+    },
+    {
+      "role": "assistant",
+      "content": "Hello, test is a success."
+    }
+  ]
+}

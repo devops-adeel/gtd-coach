@@ -1,0 +1,31 @@
+{
+  "timestamp": "20250804_135521",
+  "session_id": "20250804_134546",
+  "review_data": {
+    "projects_reviewed": 0,
+    "decisions_made": 0,
+    "items_captured": 4,
+    "phase_durations": {
+      "Startup": 6.826054811477661,
+      "Mind Sweep": 335.32666182518005
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Start the weekly review process."
+    },
+    {
+      "role": "assistant",
+      "content": "Let's get started with our weekly review. This is a great opportunity to reflect on your progress, address any challenges, and plan ahead for the upcoming week.\n\n**STARTUP (2 minutes)**\n\nBefore we begin, let me just check in with you: Are you ready to dive into this review? Do you have a clear head and are you feeling focused?\n\nYou have 30 minutes for our review today, so let's make the most of it. We'll go through each phase together, and by the end of it, you'll feel more organized, focused, and prepared for the week ahead.\n\n**Time remaining: 28 minutes**\n\nShall we move on to the first phase?"
+    },
+    {
+      "role": "user",
+      "content": "I captured 4 items during mind sweep."
+    },
+    {
+      "role": "assistant",
+      "content": "Let's take a closer look at those four items. During the Mind Sweep phase, our goal is to capture everything that comes to mind without filtering or evaluating it.\n\n**Time remaining: 26 minutes**\n\nCan you share with me what those four items are? I'll help you organize them and we can move forward from there.\n\n(Remember, no judgment here \u2013 just a neutral space for us to work through your thoughts together!)"
+    }
+  ]
+}

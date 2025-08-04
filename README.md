@@ -90,6 +90,17 @@ lms ps
 - **[SETUP_COMPLETE.md](SETUP_COMPLETE.md)** - Setup confirmation and next steps
 - **[KNOWN_ISSUES.md](KNOWN_ISSUES.md)** - Troubleshooting guide
 
+## Recent Enhancements (August 2025)
+
+- **Robust Error Handling**: Automatic retry with exponential backoff and fallback to simple prompts
+- **Comprehensive Logging**: Session-based logging with unique IDs for debugging and tracking
+- **Data Validation**: Automatic cleanup of empty entries and validation of priority values
+- **Optimized Phase Settings**: Each phase has tuned temperature and token limits for best results
+- **Enhanced Server Checks**: Detailed status about LM Studio server and loaded models
+- **Connection Pooling**: Better performance through HTTP keep-alive connections
+
+See [KNOWN_ISSUES.md](KNOWN_ISSUES.md#recent-enhancements-august-2025) for details.
+
 ## Future Enhancements
 
 - [ ] Timing app integration for automatic project list

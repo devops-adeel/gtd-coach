@@ -1,0 +1,30 @@
+{
+  "timestamp": "20250802_212301",
+  "review_data": {
+    "projects_reviewed": 0,
+    "decisions_made": 0,
+    "items_captured": 10,
+    "phase_durations": {
+      "Startup": 5.895025968551636,
+      "Mind Sweep": 359.51488995552063
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Start the weekly review process."
+    },
+    {
+      "role": "assistant",
+      "content": "Let's begin our weekly review process together.\n\n**STARTUP (2 minutes)**\n\nHello! I'm excited to support you in this week's review. Before we dive in, let me just check in with you: Are you ready to get started? Take a deep breath and let's do this!\n\nWe've got 30 minutes set aside for our review today. Let's make the most of it.\n\n**Time remaining:** 28 minutes\n\nShall we move on to the next phase?\n\n(Please respond when you're ready to proceed.)"
+    },
+    {
+      "role": "user",
+      "content": "I captured 10 items during mind sweep."
+    },
+    {
+      "role": "assistant",
+      "content": "Let's take a look at those items from your Mind Sweep.\n\n**MIND SWEEP (10 minutes)**\n\nYou've got 10 items on your list so far. Let's quickly review them together:\n\n1. \n2. \n3. \n4. \n5. \n6. \n7. \n8. \n9. \n10. \n\nNow, let's focus on making decisions about next actions for each of these items.\n\n**Time remaining:** 18 minutes\n\nWhich one would you like to start with? Remember, we're aiming for fast decisions today \u2013 no need to overthink it!\n\n(Please respond with the number of the item you'd like to tackle first.)"
+    }
+  ]
+}

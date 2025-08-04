@@ -1,0 +1,26 @@
+{
+  "timestamp": "20250804_141756",
+  "session_id": "20250804_135700",
+  "review_data": {
+    "projects_reviewed": 0,
+    "decisions_made": 0,
+    "items_captured": 7,
+    "phase_durations": {
+      "Startup": 5.504779100418091
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Start the weekly review process."
+    },
+    {
+      "role": "assistant",
+      "content": "Let's begin our weekly review process together.\n\n**STARTUP (2 minutes)**\n\nHello, and welcome to our weekly review session! How are you feeling today? Are you ready to dive in and tackle your tasks for the week?\n\nWe have 30 minutes scheduled for this review. We'll work through each phase at a steady pace to ensure we get everything done.\n\nBefore we start, take a deep breath with me. Let's begin!\n\n**Time remaining: 28 minutes**\n\nShall we move on to our first phase?"
+    },
+    {
+      "role": "user",
+      "content": "I captured 7 items during mind sweep."
+    }
+  ]
+}
