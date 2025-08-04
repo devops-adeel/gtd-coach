@@ -11,8 +11,13 @@ import time
 import sys
 import os
 import logging
+import asyncio
 from datetime import datetime
 from pathlib import Path
+
+# Import memory integration modules
+from graphiti_integration import GraphitiMemory
+from adhd_patterns import ADHDPatternDetector
 
 # Configuration
 API_URL = "http://localhost:1234/v1/chat/completions"
@@ -41,6 +46,11 @@ class GTDCoach:
             "items_captured": 0,
             "phase_durations": {}
         }
+        
+        # Initialize memory and pattern detection
+        self.memory = GraphitiMemory(self.session_id)
+        self.pattern_detector = ADHDPatternDetector()
+        self.current_phase = "STARTUP"
         
         # Phase-specific settings for optimal LLM performance
         self.phase_settings = {
@@ -127,8 +137,19 @@ class GTDCoach:
         """Send a message to the LLM and get response with enhanced retry logic"""
         self.logger.info(f"Sending message to LLM - Phase: {phase_name or 'None'}, Content length: {len(content)} chars")
         
+        # Track message timing for pattern detection
+        message_start_time = time.time()
+        
         if save_to_history:
             self.messages.append({"role": "user", "content": content})
+            # Record user interaction in memory
+            asyncio.create_task(
+                self.memory.add_interaction(
+                    role="user",
+                    content=content,
+                    phase=self.current_phase
+                )
+            )
         
         # Get phase-specific settings or use defaults
         temperature = 0.8  # Better for conversational coaching
@@ -157,6 +178,23 @@ class GTDCoach:
                 
                 if save_to_history:
                     self.messages.append({"role": "assistant", "content": assistant_message})
+                    
+                    # Calculate response metrics
+                    response_time = time.time() - message_start_time
+                    
+                    # Record assistant response in memory
+                    asyncio.create_task(
+                        self.memory.add_interaction(
+                            role="assistant",
+                            content=assistant_message,
+                            phase=self.current_phase,
+                            metrics={
+                                "response_time": response_time,
+                                "temperature": temperature,
+                                "max_tokens": max_tokens
+                            }
+                        )
+                    )
                 
                 self.logger.info(f"LLM response received - Length: {len(assistant_message)} chars")
                 return assistant_message
@@ -217,6 +255,11 @@ class GTDCoach:
         phase_start = time.time()
         self.start_timer(duration_minutes, f"{phase_name} phase complete!")
         self.logger.info(f"Starting phase: {phase_name} ({duration_minutes} minutes)")
+        
+        # Record phase start in memory
+        self.current_phase = phase_name.upper().replace(" ", "_")
+        asyncio.create_task(self.memory.add_phase_transition(phase_name, "start"))
+        
         return phase_start
     
     def end_phase(self, phase_name, phase_start):
@@ -225,6 +268,10 @@ class GTDCoach:
         self.review_data["phase_durations"][phase_name] = duration
         self.logger.info(f"Phase completed: {phase_name} - Duration: {duration/60:.1f} minutes")
         print(f"\n✓ {phase_name} completed in {duration/60:.1f} minutes")
+        
+        # Record phase end and flush episodes
+        asyncio.create_task(self.memory.add_phase_transition(phase_name, "end", duration))
+        asyncio.create_task(self.memory.flush_episodes())
     
     def run_startup_phase(self):
         """1. STARTUP PHASE (2 min)"""
@@ -254,6 +301,8 @@ class GTDCoach:
         print("Write down everything on your mind.")
         print("(Press Enter with empty line to finish early)\n")
         items = []
+        item_timestamps = []  # Track when each item was entered
+        previous_item = None
         
         capture_start = time.time()
         last_progress_update = 0
@@ -300,7 +349,26 @@ class GTDCoach:
                         continue  # Continue capturing
                         
                 items.append(item.strip())
+                item_timestamps.append(time.time())
                 self.review_data["items_captured"] += 1
+                
+                # Detect task switching pattern
+                if previous_item:
+                    time_between = item_timestamps[-1] - item_timestamps[-2] if len(item_timestamps) > 1 else None
+                    switch_data = self.pattern_detector.detect_task_switching(
+                        item.strip(), previous_item, time_between
+                    )
+                    
+                    if switch_data:
+                        asyncio.create_task(
+                            self.memory.add_behavior_pattern(
+                                pattern_type="task_switch",
+                                phase="MIND_SWEEP",
+                                pattern_data=switch_data
+                            )
+                        )
+                
+                previous_item = item.strip()
                 
             except KeyboardInterrupt:
                 print("\n✓ Capture phase ended by user")
@@ -391,8 +459,39 @@ Please help me quickly process and organize these items. Stay within the Mind Sw
                 except (ValueError, KeyboardInterrupt):
                     break
         
+        # Analyze patterns before saving
+        final_items = priority_items if len(items) > 15 else items
+        coherence_analysis = self.pattern_detector.analyze_mindsweep_coherence(final_items)
+        
+        # Calculate capture phase metrics
+        capture_duration = time.time() - capture_start
+        phase_metrics = {
+            "capture_duration_seconds": capture_duration,
+            "items_per_minute": len(items) / (capture_duration / 60),
+            "coherence_analysis": coherence_analysis
+        }
+        
+        # Add mindsweep data to memory with pattern analysis
+        asyncio.create_task(
+            self.memory.add_mindsweep_batch(final_items, phase_metrics)
+        )
+        
+        # Log coherence patterns if concerning
+        if coherence_analysis['coherence_score'] < 0.5:
+            asyncio.create_task(
+                self.memory.add_behavior_pattern(
+                    pattern_type="low_coherence",
+                    phase="MIND_SWEEP",
+                    pattern_data={
+                        "score": coherence_analysis['coherence_score'],
+                        "topic_switches": coherence_analysis['topic_switches'],
+                        "fragmentation_count": len(coherence_analysis['fragmentation_indicators'])
+                    }
+                )
+            )
+        
         # Save items for later processing
-        self.save_mindsweep_items(priority_items if len(items) > 15 else items)
+        self.save_mindsweep_items(final_items)
         
         # Final coach encouragement with phase context
         final_summary = f"""We are completing MIND SWEEP Phase B.
@@ -558,6 +657,9 @@ Items captured: {self.review_data['items_captured']}"""
         
         with open(filepath, 'w') as f:
             json.dump(validated_data, f, indent=2)
+        
+        # Create session summary in memory
+        asyncio.create_task(self.memory.create_session_summary(self.review_data))
         
         self.logger.info(f"Saved complete review log to {filepath.name}")
         self.logger.info(f"Session summary: {self.review_data}")
