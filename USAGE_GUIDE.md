@@ -200,10 +200,14 @@ Priority (A/B/C): C
 ```
 ~/gtd-coach/data/
 ├── mindsweep_20250102_143022.json    # Items from brain dump
-└── priorities_20250102_145522.json    # Your ABC priorities
+├── priorities_20250102_145522.json    # Your ABC priorities
+└── graphiti_batch_*.json              # Memory episodes (auto-generated)
 
 ~/gtd-coach/logs/
 └── review_20250102_143022.json        # Complete session log
+
+~/gtd-coach/summaries/
+└── weekly_summary_*.md                # AI-generated insights
 ```
 
 ### Viewing Your History
@@ -213,7 +217,22 @@ cat ~/gtd-coach/data/mindsweep_*.json | jq
 
 # Check your last priorities
 ls -la ~/gtd-coach/data/priorities_*.json
+
+# Generate weekly insights (NEW!)
+python3 ~/gtd-coach/generate_summary.py
+
+# View your latest summary
+cat ~/gtd-coach/summaries/weekly_summary_*.md
 ```
+
+### Memory & Pattern Tracking (NEW!)
+The coach now automatically tracks:
+- **Task switching patterns**: How often you jump between topics
+- **Coherence scores**: How organized your thoughts are
+- **Focus quality**: Based on response times and consistency
+- **Productivity trends**: Completion rates and efficiency
+
+All tracking happens in the background - just review normally!
 
 ### Tracking Patterns
 Look for:

@@ -23,6 +23,12 @@ python3 ~/gtd-coach/test-simple-prompt.py
 
 # Run demo review (for testing changes)
 python3 ~/gtd-coach/demo-review.py
+
+# Test Graphiti integration
+python3 ~/gtd-coach/test_graphiti_integration.py
+
+# Generate weekly summary
+python3 ~/gtd-coach/generate_summary.py
 ```
 
 ## Architecture
@@ -40,15 +46,23 @@ The system follows a **Phase-Based State Machine** with strict time boxing:
 - **start-coach.sh**: Handles LM Studio server lifecycle and model loading
 - **scripts/timer.sh**: Standalone timer with audio alerts at 50%, 20%, and 10% remaining
 - **prompts/**: System prompts (full vs simple) for ADHD-optimized coaching
+- **graphiti_integration.py**: Async memory management with episode batching
+- **adhd_patterns.py**: ADHD pattern detection algorithms
+- **generate_summary.py**: Weekly insights generator
 
 ### Data Flow
 ```
 User Input → Python Orchestrator → LM Studio API → Llama Model → Structured Response → JSON Logging
+                     ↓
+             Graphiti Memory (Async)
+                     ↓
+          Pattern Detection & Analysis
 ```
 
 All data is persisted in:
-- `data/`: Mindsweep captures and priorities (JSON format with timestamps)
+- `data/`: Mindsweep captures, priorities, and Graphiti batches (JSON format with timestamps)
 - `logs/`: Complete review session transcripts
+- `summaries/`: AI-generated weekly insights (Markdown format)
 
 ### API Integration
 - LM Studio server: `http://localhost:1234/v1/chat/completions`
@@ -84,6 +98,8 @@ All data is JSON-formatted:
 - Mindsweep captures: List of strings with timestamps
 - Priorities: ABC-categorized actions with project associations
 - Session logs: Complete interaction history with timing metadata
+- Graphiti episodes: Structured events with type, phase, and pattern data
+- Behavior patterns: Task switches, coherence scores, focus indicators
 
 ## Critical Implementation Notes
 
@@ -93,10 +109,41 @@ All data is JSON-formatted:
 4. **User Input**: Uses direct `input()` calls - requires interactive terminal
 5. **Model Context**: Llama 3.1 8B has 32,768 token context limit
 
+## Memory Integration Architecture
+
+### How Graphiti Integration Works
+1. **Async Capture**: All interactions are queued using `asyncio.create_task()` to avoid blocking
+2. **Batch Processing**: Episodes are flushed to disk after each phase to minimize I/O
+3. **Pattern Detection**: Real-time analysis during mind sweep for task switching and coherence
+4. **Session Summary**: Complete review data is compiled and saved at session end
+
+### Adding New Pattern Types
+To track additional ADHD patterns, extend `adhd_patterns.py`:
+```python
+def detect_new_pattern(self, data):
+    # Add detection logic
+    return pattern_data
+```
+
+### Memory Data Format
+Episodes follow this structure:
+```json
+{
+  "type": "interaction|phase_transition|behavior_pattern",
+  "phase": "MIND_SWEEP",
+  "data": {
+    // Pattern-specific data
+  },
+  "timestamp": "ISO-8601",
+  "session_id": "20250804_141824"
+}
+```
+
 ## Future Enhancement Opportunities
 
 1. **Timing App Integration**: Auto-populate project lists from Timing.app
-2. **Graphiti Memory**: Track patterns across reviews for insights
+2. **Graphiti Memory**: ✅ IMPLEMENTED - Tracks patterns across reviews for insights
 3. **Metrics Dashboard**: Visualize review completion and patterns
 4. **Cross-Platform Support**: Replace macOS-specific components
 5. **Streaming Responses**: Prevent timeout issues with large prompts
+6. **Real-time MCP Integration**: Direct Graphiti API calls instead of batch files

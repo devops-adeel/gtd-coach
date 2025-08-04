@@ -10,6 +10,9 @@ A structured, time-boxed weekly review system powered by LM Studio and designed 
 
 # Or manually start review if server is already running
 python3 ~/gtd-coach/gtd-review.py
+
+# Generate weekly summary after reviews
+python3 ~/gtd-coach/generate_summary.py
 ```
 
 ## Features
@@ -18,6 +21,8 @@ python3 ~/gtd-coach/gtd-review.py
 - **Audio alerts** at key time intervals (50%, 20%, 10% remaining)
 - **ADHD-optimized prompting** - directive, structured, time-aware
 - **Automatic logging** of all reviews for pattern tracking
+- **Graphiti memory integration** - Tracks patterns, behaviors, and productivity insights
+- **Weekly summaries** - AI-generated reports with ADHD-specific insights
 - **Simple timer utility** for other time-boxing needs
 
 ## Directory Structure
@@ -25,17 +30,23 @@ python3 ~/gtd-coach/gtd-review.py
 ```
 ~/gtd-coach/
 ├── scripts/
-│   └── timer.sh          # Standalone timer with audio alerts
+│   └── timer.sh                # Standalone timer with audio alerts
 ├── prompts/
-│   └── system-prompt.txt # ADHD coach personality
+│   └── system-prompt.txt       # ADHD coach personality
 ├── data/
-│   ├── mindsweep_*.json  # Captured items from reviews
-│   └── priorities_*.json # Prioritized actions
+│   ├── mindsweep_*.json        # Captured items from reviews
+│   ├── priorities_*.json       # Prioritized actions
+│   └── graphiti_batch_*.json   # Memory episodes for Graphiti
 ├── logs/
-│   └── review_*.json     # Complete review transcripts
-├── gtd-review.py         # Main review orchestrator
-├── start-coach.sh        # One-command startup
-└── README.md            # This file
+│   └── review_*.json           # Complete review transcripts
+├── summaries/
+│   └── weekly_summary_*.md     # AI-generated weekly insights
+├── gtd-review.py               # Main review orchestrator
+├── graphiti_integration.py     # Memory management interface
+├── adhd_patterns.py            # ADHD pattern detection
+├── generate_summary.py         # Weekly insights generator
+├── start-coach.sh              # One-command startup
+└── README.md                   # This file
 ```
 
 ## Review Phases
@@ -45,6 +56,44 @@ python3 ~/gtd-coach/gtd-review.py
 3. **PROJECT REVIEW (12 min)** - Quick next-action decisions
 4. **PRIORITIZATION (5 min)** - ABC priority assignment
 5. **WRAP-UP (3 min)** - Save and celebrate
+
+## Memory & Pattern Tracking
+
+The GTD Coach now includes Graphiti memory integration that automatically:
+
+- **Tracks behavioral patterns**: Task switching frequency, focus indicators, coherence scores
+- **Captures all interactions**: Every conversation with the coach is stored for analysis
+- **Detects ADHD patterns**: Based on linguistic markers from research
+- **Generates weekly summaries**: Actionable insights with personalized recommendations
+
+### Viewing Your Insights
+
+```bash
+# Generate a weekly summary (analyzes last 7 days)
+python3 ~/gtd-coach/generate_summary.py
+
+# View generated summaries
+ls ~/gtd-coach/summaries/
+```
+
+### What Gets Tracked
+
+1. **Mind Sweep Patterns**
+   - Topic distribution and switches
+   - Coherence scores (how organized your thoughts are)
+   - Common themes and recurring items
+
+2. **Productivity Metrics**
+   - Session completion rates
+   - Average duration per phase
+   - Items captured per session
+
+3. **ADHD Indicators**
+   - Task switching frequency
+   - Focus quality scores
+   - Fragmentation patterns
+
+All tracking happens automatically in the background without impacting your review performance.
 
 ## Manual Timer Usage
 
@@ -89,6 +138,7 @@ lms ps
 - **[QUICK_REFERENCE.txt](QUICK_REFERENCE.txt)** - Printable cheat sheet
 - **[SETUP_COMPLETE.md](SETUP_COMPLETE.md)** - Setup confirmation and next steps
 - **[KNOWN_ISSUES.md](KNOWN_ISSUES.md)** - Troubleshooting guide
+- **[GRAPHITI_INTEGRATION.md](GRAPHITI_INTEGRATION.md)** - Technical details of memory integration
 
 ## Recent Enhancements (August 2025)
 
@@ -98,15 +148,18 @@ lms ps
 - **Optimized Phase Settings**: Each phase has tuned temperature and token limits for best results
 - **Enhanced Server Checks**: Detailed status about LM Studio server and loaded models
 - **Connection Pooling**: Better performance through HTTP keep-alive connections
+- **Graphiti Memory Integration**: Automatic pattern tracking, ADHD behavior detection, and weekly summaries
+- **ADHD Pattern Detection**: Research-based algorithms for task switching and focus analysis
 
 See [KNOWN_ISSUES.md](KNOWN_ISSUES.md#recent-enhancements-august-2025) for details.
 
 ## Future Enhancements
 
 - [ ] Timing app integration for automatic project list
-- [ ] Graphiti memory for pattern tracking
+- [x] Graphiti memory for pattern tracking (Implemented August 2025)
 - [ ] Review metrics dashboard
 - [ ] Custom MCP tools for advanced features
+- [ ] Real-time Graphiti MCP integration (currently using batch files)
 
 ## Tips for ADHD Success
 

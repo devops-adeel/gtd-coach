@@ -1,5 +1,6 @@
 GTD COACH QUICK REFERENCE
 ========================
+Now with automatic memory tracking & pattern detection!
 
 START YOUR REVIEW
 $ ~/gtd-coach/start-coach.sh
@@ -33,6 +34,10 @@ Your data saved in:
 - ~/gtd-coach/data/mindsweep_[date].json
 - ~/gtd-coach/data/priorities_[date].json
 - ~/gtd-coach/logs/review_[date].json
+- ~/gtd-coach/data/graphiti_batch_[date].json (memory tracking)
+
+View weekly insights:
+$ python3 ~/gtd-coach/generate_summary.py
 
 TEST COMMANDS
 -------------
