@@ -1,1 +1,4 @@
 __pycache__/
+
+# Graphiti test data
+data/graphiti_batch_*test*.json
