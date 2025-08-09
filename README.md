@@ -74,6 +74,7 @@ python3 gtd-review.py
 - **ADHD-optimized prompting** - directive, structured, time-aware
 - **Automatic logging** of all reviews for pattern tracking
 - **Graphiti memory integration** - Tracks patterns, behaviors, and productivity insights
+- **Timing app integration** - Automatically loads your real project data from last week
 - **Weekly summaries** - AI-generated reports with ADHD-specific insights
 - **Simple timer utility** for other time-boxing needs
 
@@ -146,6 +147,34 @@ ls ~/gtd-coach/summaries/
    - Fragmentation patterns
 
 All tracking happens automatically in the background without impacting your review performance.
+
+## Timing App Integration
+
+The GTD Coach now automatically fetches your real project data from Timing.app:
+
+### Setup
+1. Copy `.env.example` to `.env`
+2. Get your API key from [web.timingapp.com](https://web.timingapp.com) (requires Timing Connect)
+3. Add to `.env`:
+   ```
+   TIMING_API_KEY=your-key-here
+   TIMING_MIN_MINUTES=30  # Only show projects with >30 min last week
+   ```
+
+### What It Does
+- **Automatic Loading**: Fetches your projects during review startup
+- **Smart Filtering**: Only shows projects with significant time investment
+- **Real Data**: Your actual project names and hours from last week
+- **Graceful Fallback**: Uses mock data if API unavailable
+
+### Testing
+```bash
+# Test Timing integration
+./docker-run.sh timing
+
+# Run full review with your projects
+./docker-run.sh
+```
 
 ## LLM Performance Monitoring (Langfuse)
 
@@ -265,9 +294,10 @@ See [KNOWN_ISSUES.md](KNOWN_ISSUES.md#recent-enhancements-august-2025) for detai
 
 ## Future Enhancements
 
-- [ ] Timing app integration for automatic project list
+- [x] Timing app integration for automatic project list (Implemented August 2025)
 - [x] Graphiti memory for pattern tracking (Implemented August 2025)
 - [ ] Review metrics dashboard
+- [ ] Cross-platform audio support (currently macOS only)
 - [ ] Custom MCP tools for advanced features
 - [ ] Real-time Graphiti MCP integration (currently using batch files)
 

@@ -18,8 +18,12 @@ services:
       - ./adhd_patterns.py:/app/adhd_patterns.py:ro
       - ./generate_summary.py:/app/generate_summary.py:ro
       - ./test_langfuse.py:/app/test_langfuse.py:ro
+      - ./timing_integration.py:/app/timing_integration.py:ro
+      - ./test_timing_integration.py:/app/test_timing_integration.py:ro
       # Mount prompts for easy editing
       - ./prompts:/app/prompts:ro
+      # Mount .env file if it exists (for Timing API key)
+      - ./.env:/app/.env:ro
     environment:
       # Pass through terminal for interactive sessions
       - TERM=xterm-256color

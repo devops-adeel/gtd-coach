@@ -15,6 +15,16 @@ A complete guide to using your ADHD-optimized GTD weekly review system.
 
 ## Before Your Review
 
+### Setting Up Timing Integration (One-Time Setup)
+1. Copy `.env.example` to `.env` in the gtd-coach directory
+2. Get your API key from [web.timingapp.com](https://web.timingapp.com)
+3. Add your key to `.env`:
+   ```
+   TIMING_API_KEY=your-key-here
+   TIMING_MIN_MINUTES=30  # Only show projects >30 min
+   ```
+4. Test with: `./docker-run.sh timing`
+
 ### Preparation Checklist
 - [ ] Block 30 uninterrupted minutes
 - [ ] Phone in another room or airplane mode
@@ -55,6 +65,9 @@ GTD Weekly Review Coach for ADHD
 ✓ LM Studio server is running
 
 Press Enter when ready to start your 30-minute review...
+
+📊 Fetching your project data from Timing...
+✓ Loaded 6 projects from last week
 ```
 
 ---
@@ -120,20 +133,26 @@ Finish capture early? (y/n): y
 
 ### Phase 3: PROJECT REVIEW (12 minutes)
 **What happens:**
-- Reviews up to 10 projects
+- Reviews your actual projects from Timing.app (if configured)
+- Shows real time spent on each project last week
 - 45 seconds per project for next action
-- Shows time spent last week (when integrated)
+- Falls back to mock data if Timing unavailable
 
 **Your role:**
 - Quickly identify ONE next action per project
 - Don't overthink - first reasonable action
 - Type action and press Enter
 
-**Example:**
+**Example with Timing data:**
 ```
-[1/10] Project: Website Redesign
-Last week time: 8.5 hours
-Next action (45 sec): draft new homepage wireframe
+[1/6] Project: Web Browsing
+Last week time: 10.9 hours
+Next action (45 sec): organize bookmarks and close old tabs
+✓ Recorded
+
+[2/6] Project: Communication
+Last week time: 8.6 hours
+Next action (45 sec): schedule email processing blocks
 ✓ Recorded
 ```
 

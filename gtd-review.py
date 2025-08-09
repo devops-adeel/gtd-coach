@@ -14,10 +14,14 @@ import logging
 import asyncio
 from datetime import datetime
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Import memory integration modules
 from graphiti_integration import GraphitiMemory
 from adhd_patterns import ADHDPatternDetector
+
+# Import Timing integration
+from timing_integration import TimingAPI, get_mock_projects
 
 # Import Langfuse for LLM observability
 try:
@@ -48,6 +52,9 @@ session.headers.update({'Connection': 'keep-alive'})
 
 class GTDCoach:
     def __init__(self):
+        # Load environment variables
+        load_dotenv()
+        
         # Set up logging
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.setup_logging()
@@ -69,6 +76,11 @@ class GTDCoach:
         self.memory = GraphitiMemory(self.session_id)
         self.pattern_detector = ADHDPatternDetector()
         self.current_phase = "STARTUP"
+        
+        # Initialize Timing API
+        self.timing_api = TimingAPI()
+        self.timing_projects = None  # Will be populated during startup
+        self.timing_fetch_task = None  # Async task for fetching projects
         
         # Initialize Langfuse client if available
         self.langfuse_enabled = False
@@ -358,9 +370,42 @@ class GTDCoach:
         phase_start = self.phase_timer("Startup", 2)
         self.review_start_time = datetime.now()
         
+        # Start fetching Timing data asynchronously if configured
+        if self.timing_api.is_configured():
+            self.logger.info("Starting async fetch of Timing project data")
+            min_minutes = int(os.getenv('TIMING_MIN_MINUTES', '30'))
+            self.timing_fetch_task = self.loop.create_task(
+                self.timing_api.fetch_projects_async(min_minutes)
+            )
+            print("\n📊 Fetching your project data from Timing...")
+        else:
+            self.logger.info("Timing API not configured, will use mock data")
+            if not os.path.exists('.env'):
+                print("\n💡 Tip: Set up Timing integration for real project data")
+                print("   Copy .env.example to .env and add your API key")
+        
         # Initial greeting
         response = self.send_message("Start the weekly review process.", phase_name='STARTUP')
         print(f"\nCoach: {response}")
+        
+        # Complete async fetch if it was started
+        if self.timing_fetch_task:
+            try:
+                # Wait for fetch to complete (with timeout)
+                self.timing_projects = self.loop.run_until_complete(
+                    asyncio.wait_for(self.timing_fetch_task, timeout=2.0)
+                )
+                if self.timing_projects:
+                    self.logger.info(f"Successfully fetched {len(self.timing_projects)} projects from Timing")
+                    print(f"✓ Loaded {len(self.timing_projects)} projects from last week")
+                else:
+                    self.logger.warning("No projects returned from Timing API")
+            except asyncio.TimeoutError:
+                self.logger.warning("Timing API fetch timed out, will use mock data")
+                print("⚠️  Timing data fetch timed out, using backup data")
+            except Exception as e:
+                self.logger.error(f"Error fetching Timing data: {e}")
+                print("⚠️  Could not fetch Timing data, using backup data")
         
         self.end_phase("Startup", phase_start)
     
@@ -688,15 +733,27 @@ Items captured: {self.review_data['items_captured']}"""
         self.logger.info(f"Saved {len(validated_items)} mindsweep items to {filepath.name}")
     
     def load_projects(self):
-        """Load project list (mock data for now)"""
-        # In real implementation, load from Timing app export or saved data
-        return [
-            {"name": "Email Processing", "time_spent": 5.2},
-            {"name": "Project Alpha Development", "time_spent": 12.5},
-            {"name": "Team Meetings", "time_spent": 8.3},
-            {"name": "Documentation", "time_spent": 3.1},
-            {"name": "Code Reviews", "time_spent": 6.7},
-        ]
+        """Load project list from Timing API or use mock data"""
+        # Use pre-fetched Timing data if available
+        if self.timing_projects:
+            self.logger.info(f"Using {len(self.timing_projects)} projects from Timing API")
+            
+            # Check if projects look auto-generated and provide guidance
+            app_names = ['Safari', 'Chrome', 'Mail', 'Slack', 'Terminal', 'Code']
+            auto_generated = [p for p in self.timing_projects 
+                            if any(app in p['name'] for app in app_names)]
+            
+            if len(auto_generated) > len(self.timing_projects) * 0.5:
+                print("\n💡 Project Organization Tip:")
+                print("   Many of your projects appear to be app names.")
+                print("   Consider creating specific projects in Timing for better GTD reviews.")
+                print("   Example: Instead of 'Safari', create 'Research - Project X'\n")
+            
+            return self.timing_projects
+        
+        # Fallback to mock data
+        self.logger.info("Using mock project data (Timing API not available)")
+        return get_mock_projects()
     
     def save_priorities(self, priorities):
         """Save prioritized actions"""

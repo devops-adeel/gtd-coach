@@ -1,6 +1,9 @@
 GTD COACH QUICK REFERENCE
 ========================
-Now with automatic memory tracking, pattern detection & LLM performance monitoring!
+Now with automatic memory tracking, pattern detection, Timing integration & LLM monitoring!
+
+TIMING SETUP (One-Time)
+Copy .env.example to .env, add API key from web.timingapp.com
 
 START YOUR REVIEW (Native Python)
 $ ~/gtd-coach/start-coach.sh
@@ -46,6 +49,7 @@ DOCKER COMMANDS (If using Docker)
 ---------------------------------
 Build image:    ./docker-run.sh build
 Run review:     ./docker-run.sh
+Test Timing:    ./docker-run.sh timing
 Test Langfuse:  ./docker-run.sh test
 Weekly summary: ./docker-run.sh summary
 

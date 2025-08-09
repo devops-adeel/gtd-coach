@@ -8,37 +8,25 @@ GTD Coach is an ADHD-optimized Getting Things Done (GTD) weekly review system th
 
 ## Essential Commands
 
+### IMPORTANT: Run all Python scripts in Docker/OrbStack
+Due to Python environment management, all Python scripts should be run through Docker/OrbStack:
+
 ```bash
 # Start the full system (handles LM Studio server and model loading)
 ~/gtd-coach/start-coach.sh
 
-# Run review directly (requires LM Studio server already running)
-python3 ~/gtd-coach/gtd-review.py
-
-# Test timer functionality
+# Test timer functionality (native bash, no Docker needed)
 ~/gtd-coach/scripts/timer.sh 1 "Test complete!"
-
-# Test LLM connectivity
-python3 ~/gtd-coach/test-simple-prompt.py
-
-# Run demo review (for testing changes)
-python3 ~/gtd-coach/demo-review.py
-
-# Test Graphiti integration
-python3 ~/gtd-coach/test_graphiti_integration.py
-
-# Generate weekly summary
-python3 ~/gtd-coach/generate_summary.py
-
-# Test Langfuse integration
-python3 ~/gtd-coach/test_langfuse.py
 ```
 
-### Docker/OrbStack Commands (for externally managed Python environments)
+### Docker/OrbStack Commands (REQUIRED for Python scripts)
 
 ```bash
 # Run weekly review in Docker
 ./docker-run.sh
+
+# Test Timing app integration (NEW)
+./docker-run.sh timing
 
 # Test Langfuse integration
 ./docker-run.sh test
@@ -46,7 +34,7 @@ python3 ~/gtd-coach/test_langfuse.py
 # Generate weekly summary
 ./docker-run.sh summary
 
-# Build/rebuild Docker image
+# Build/rebuild Docker image (required after dependency changes)
 ./docker-run.sh build
 
 # Open shell in container for debugging
@@ -54,6 +42,7 @@ python3 ~/gtd-coach/test_langfuse.py
 
 # Using docker-compose directly
 docker compose up gtd-coach            # Run review
+docker compose run gtd-coach python3 test_timing_integration.py  # Test Timing
 docker compose run test-langfuse       # Test Langfuse
 docker compose run generate-summary    # Generate summary
 ```
@@ -114,8 +103,9 @@ All data is persisted in:
   - Future fix: Implement streaming or chunked responses
 - **Platform Dependency**: Audio alerts use macOS-specific `afplay`
   - Future fix: Cross-platform audio solution
-- **Manual Project Data**: Currently requires manual project list entry
-  - Future enhancement: Timing app integration planned
+- **Timing API Parameters**: Fixed in latest version (2025-08-09)
+  - Previous issue: Invalid `timespan_grouping_mode` parameter
+  - Solution: Updated to use correct API parameters per documentation
 
 ### Testing Changes
 1. Always test with `demo-review.py` first
@@ -196,9 +186,48 @@ cp langfuse_tracker.py.example langfuse_tracker.py
 # - LANGFUSE_SECRET_KEY = "sk-lf-..."  # Your secret key
 ```
 
+## Timing App Integration ✅ VERIFIED WORKING
+
+### Setup
+1. Copy `.env.example` to `.env`
+2. Get your API key from https://web.timingapp.com (requires Timing Connect subscription)
+3. Add the key to `.env` file:
+   ```
+   TIMING_API_KEY=your-key-here
+   TIMING_MIN_MINUTES=30  # Optional: minimum project time threshold (default: 30)
+   ```
+
+### How It Works
+- **Pre-fetching**: During STARTUP phase (2 min), the system fetches last week's project data
+- **Smart Filtering**: Only shows projects with >30 minutes (configurable via TIMING_MIN_MINUTES)
+- **Fallback**: Uses mock data if API unavailable, maintaining ADHD time constraints
+- **Organization Guidance**: Detects auto-generated app names and suggests improvements
+- **Performance**: API response typically <1 second, well within the 3-second timeout
+
+### Verified Working (2025-08-09)
+- Successfully fetches real project data (e.g., Web Browsing: 10.9h, Communication: 8.6h)
+- Correctly filters projects by time threshold
+- Gracefully handles API errors with fallback to mock data
+- Integrates seamlessly with all 5 GTD review phases
+
+### Testing Commands
+```bash
+# Always use Docker/OrbStack for Python scripts
+./docker-run.sh timing  # Test Timing integration (verified working)
+./docker-run.sh build   # Rebuild after adding .env file
+./docker-run.sh         # Run full review with real Timing data
+```
+
+### API Parameters (Corrected)
+The Timing API requires specific parameter names:
+- `start_date_min` and `start_date_max` (not `start_date`/`end_date`)
+- `columns[]`: 'project' (array notation required)
+- `include_project_data`: 1 (to get full project details)
+- Removed `timespan_grouping_mode` (was causing 422 errors)
+
 ## Future Enhancement Opportunities
 
-1. **Timing App Integration**: Auto-populate project lists from Timing.app
+1. **Timing App Integration**: ✅ IMPLEMENTED - Real project data from Timing.app
 2. **Graphiti Memory**: ✅ IMPLEMENTED - Tracks patterns across reviews for insights
 3. **Langfuse Observability**: ✅ IMPLEMENTED - LLM performance monitoring
 4. **Metrics Dashboard**: Visualize review completion and patterns

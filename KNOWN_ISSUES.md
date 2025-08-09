@@ -52,7 +52,39 @@ For the full interactive experience:
 python3 ~/gtd-coach/gtd-review.py
 ```
 
+## 4. Timing API Parameter Issue (RESOLVED - August 9, 2025)
+
+**Previous Issue**: The Timing API integration was returning 422 errors due to incorrect parameter names.
+
+**Root Cause**: 
+- Used incorrect parameter `timespan_grouping_mode: 'none'` which is invalid
+- Used wrong date parameter names (`start_date`/`end_date` instead of `start_date_min`/`start_date_max`)
+
+**Resolution Implemented**:
+```python
+# Corrected parameters in timing_integration.py
+params = {
+    'start_date_min': start_str,
+    'start_date_max': end_str,
+    'columns[]': 'project',
+    'include_project_data': 1
+    # Removed invalid timespan_grouping_mode
+}
+```
+
+**Verification**: Successfully tested on August 9, 2025 with real data:
+- ✅ Fetches 6 projects with correct time calculations
+- ✅ Filters by 30-minute threshold as expected
+- ✅ API response <1 second
+- ✅ Graceful fallback to mock data on errors
+
 ## Recent Enhancements (August 2025)
+
+### Timing App Integration (August 9, 2025)
+- Successfully integrated with Timing.app API
+- Automatically loads real project data during reviews
+- Smart filtering shows only projects with significant time investment
+- Verified working with production data
 
 ### Error Handling Improvements
 1. **Automatic Retry Logic**: LLM requests retry up to 3 times with exponential backoff
