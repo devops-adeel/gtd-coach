@@ -292,3 +292,187 @@ class ADHDPatternDetector:
         
         mean = sum(values) / len(values)
         return sum((x - mean) ** 2 for x in values) / len(values)
+    
+    def analyze_timing_switches(self, timing_data: Dict) -> Dict:
+        """Analyze timing data for ADHD-specific patterns
+        
+        Args:
+            timing_data: Data from TimingAPI.analyze_timing_patterns_async()
+        
+        Returns:
+            Dictionary with ADHD pattern analysis
+        """
+        if not timing_data or timing_data.get('data_type') != 'detailed':
+            return {
+                'patterns_detected': False,
+                'adhd_indicators': [],
+                'recommendations': []
+            }
+        
+        focus_metrics = timing_data.get('focus_metrics', {})
+        switch_analysis = timing_data.get('switch_analysis', {})
+        
+        adhd_indicators = []
+        recommendations = []
+        
+        # Analyze focus score
+        focus_score = focus_metrics.get('focus_score', 100)
+        if focus_score < 40:
+            adhd_indicators.append({
+                'type': 'low_focus',
+                'severity': 'high',
+                'value': focus_score,
+                'message': f'Focus score of {focus_score} indicates severe attention fragmentation'
+            })
+            recommendations.append('Consider time-blocking with 25-minute Pomodoros')
+        elif focus_score < 60:
+            adhd_indicators.append({
+                'type': 'moderate_focus',
+                'severity': 'medium',
+                'value': focus_score,
+                'message': f'Focus score of {focus_score} shows frequent context switching'
+            })
+            recommendations.append('Try batching similar tasks together')
+        
+        # Analyze switch patterns
+        switches_per_hour = focus_metrics.get('switches_per_hour', 0)
+        if switches_per_hour > 8:
+            adhd_indicators.append({
+                'type': 'excessive_switching',
+                'severity': 'high',
+                'value': switches_per_hour,
+                'message': f'{switches_per_hour:.1f} switches/hour is well above typical'
+            })
+            recommendations.append('Use app blockers during focus time')
+        
+        # Analyze scatter periods
+        scatter_count = focus_metrics.get('scatter_periods_count', 0)
+        if scatter_count > 2:
+            adhd_indicators.append({
+                'type': 'scatter_episodes',
+                'severity': 'medium',
+                'value': scatter_count,
+                'message': f'{scatter_count} scatter periods detected'
+            })
+            recommendations.append('Schedule breaks to prevent overwhelm')
+        
+        # Analyze hyperfocus
+        hyperfocus_score = focus_metrics.get('hyperfocus_score', 0)
+        if hyperfocus_score > 80:
+            adhd_indicators.append({
+                'type': 'hyperfocus',
+                'severity': 'info',
+                'value': hyperfocus_score,
+                'message': 'Strong hyperfocus periods detected - leverage these times'
+            })
+            recommendations.append('Schedule important work during hyperfocus windows')
+        
+        # Check for app-hopping patterns
+        if switch_analysis.get('switch_patterns'):
+            app_patterns = [p for p in switch_analysis['switch_patterns'] 
+                           if any(app in p[0] for app in ['Safari', 'Chrome', 'Mail', 'Slack'])]
+            if len(app_patterns) >= 3:
+                adhd_indicators.append({
+                    'type': 'app_hopping',
+                    'severity': 'medium',
+                    'value': len(app_patterns),
+                    'message': 'Frequent switching between communication/browser apps'
+                })
+                recommendations.append('Set specific times for email/chat checking')
+        
+        return {
+            'patterns_detected': len(adhd_indicators) > 0,
+            'adhd_indicators': adhd_indicators,
+            'recommendations': recommendations,
+            'focus_profile': self._determine_focus_profile(focus_metrics)
+        }
+    
+    def _determine_focus_profile(self, focus_metrics: Dict) -> str:
+        """Determine user's focus profile based on metrics"""
+        focus_score = focus_metrics.get('focus_score', 50)
+        hyperfocus_score = focus_metrics.get('hyperfocus_score', 0)
+        focus_periods = focus_metrics.get('focus_periods_count', 0)
+        scatter_periods = focus_metrics.get('scatter_periods_count', 0)
+        
+        if hyperfocus_score > 70 and focus_score > 60:
+            return "Hyperfocus-capable: Strong focus when engaged"
+        elif focus_score > 70:
+            return "Steady focus: Consistent attention management"
+        elif scatter_periods > focus_periods:
+            return "Scattered: Frequent attention shifts dominate"
+        elif focus_periods > 0 and focus_score < 50:
+            return "Mixed: Alternates between focus and distraction"
+        else:
+            return "Variable: Inconsistent focus patterns"
+    
+    def correlate_timing_with_mindsweep(self, timing_data: Dict, 
+                                       mindsweep_analysis: Dict) -> Dict:
+        """Correlate timing patterns with mindsweep coherence
+        
+        Args:
+            timing_data: Timing analysis results
+            mindsweep_analysis: Mindsweep coherence analysis
+        
+        Returns:
+            Correlation insights
+        """
+        correlations = []
+        
+        # Check if low focus correlates with fragmented mindsweep
+        if timing_data.get('focus_metrics'):
+            focus_score = timing_data['focus_metrics'].get('focus_score', 100)
+            coherence_score = mindsweep_analysis.get('coherence_score', 1) * 100
+            
+            if focus_score < 50 and coherence_score < 50:
+                correlations.append({
+                    'type': 'double_fragmentation',
+                    'message': 'Both work patterns and thought capture show fragmentation',
+                    'insight': 'Consider environmental changes to reduce distractions'
+                })
+            elif focus_score > 70 and coherence_score > 70:
+                correlations.append({
+                    'type': 'strong_alignment',
+                    'message': 'Good focus aligns with organized thinking',
+                    'insight': 'Current strategies are working well'
+                })
+            elif abs(focus_score - coherence_score) > 30:
+                correlations.append({
+                    'type': 'mismatch',
+                    'message': f'Focus ({focus_score}) and coherence ({coherence_score:.0f}) diverge',
+                    'insight': 'Different factors may affect work vs. planning'
+                })
+        
+        # Check if many switches correlate with many topics
+        if timing_data.get('switch_analysis') and mindsweep_analysis.get('topic_switches'):
+            work_switches = timing_data['switch_analysis'].get('switches_per_hour', 0)
+            thought_switches = mindsweep_analysis.get('topic_switches', 0)
+            
+            if work_switches > 5 and thought_switches > 5:
+                correlations.append({
+                    'type': 'high_switching',
+                    'message': 'High context switching in both work and planning',
+                    'insight': 'May benefit from mindfulness or focus exercises'
+                })
+        
+        return {
+            'correlations': correlations,
+            'overall_pattern': self._determine_overall_pattern(correlations)
+        }
+    
+    def _determine_overall_pattern(self, correlations: List[Dict]) -> str:
+        """Determine overall ADHD pattern from correlations"""
+        if not correlations:
+            return "No clear pattern detected"
+        
+        types = [c['type'] for c in correlations]
+        
+        if 'double_fragmentation' in types:
+            return "Significant ADHD symptoms - comprehensive support needed"
+        elif 'strong_alignment' in types:
+            return "Well-managed ADHD - current strategies effective"
+        elif 'high_switching' in types:
+            return "Classic ADHD switching pattern - focus on reduction strategies"
+        elif 'mismatch' in types:
+            return "Complex pattern - may need targeted interventions"
+        else:
+            return "Mixed indicators - monitor patterns over time"

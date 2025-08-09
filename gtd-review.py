@@ -709,6 +709,48 @@ Mind sweep phase is now complete. Please provide encouragement and prepare me fo
         
         phase_start = self.phase_timer("Wrap-up", 3)
         
+        # Analyze timing patterns if available
+        timing_analysis = None
+        if self.timing_api.is_configured():
+            try:
+                # Get detailed timing analysis
+                timing_analysis = self.loop.run_until_complete(
+                    self.timing_api.analyze_timing_patterns_async()
+                )
+                
+                if timing_analysis and timing_analysis.get('focus_metrics'):
+                    # Store in memory
+                    adhd_analysis = self.pattern_detector.analyze_timing_switches(timing_analysis)
+                    
+                    self.loop.create_task(
+                        self.memory.add_timing_analysis(timing_analysis, adhd_analysis)
+                    )
+                    
+                    # Show focus score
+                    focus_score = timing_analysis['focus_metrics'].get('focus_score', 0)
+                    print(f"\n📊 Your Focus Score: {focus_score}/100")
+                    print(f"   ({timing_analysis['focus_metrics'].get('interpretation', '')})")
+                    
+                    # Compare with priorities
+                    if self.priorities and timing_analysis.get('projects'):
+                        comparison = compare_time_with_priorities(
+                            timing_analysis['projects'],
+                            self.priorities,
+                            timing_analysis
+                        )
+                        
+                        # Show alignment
+                        alignment = comparison.get('alignment_score', 0)
+                        emoji = "✅" if alignment > 70 else "⚠️" if alignment > 40 else "❌"
+                        print(f"\n{emoji} Priority Alignment: {alignment:.0f}%")
+                        
+                        # Store comparison
+                        self.review_data['timing_comparison'] = comparison
+                        self.review_data['timing_analysis'] = timing_analysis
+            
+            except Exception as e:
+                self.logger.error(f"Failed to analyze timing patterns: {e}")
+        
         # Generate summary
         total_time = (datetime.now() - self.review_start_time).total_seconds() / 60
         
@@ -724,16 +766,9 @@ Items captured: {self.review_data['items_captured']}"""
         self.save_review_log()
         
         # Show time adjustment suggestion if we have data
-        if self.timing_projects and self.priorities:
-            timing_data = {
-                'total_hours': sum(p.get('time_spent', 0) for p in self.timing_projects),
-                'estimated_hours': {
-                    '3. Arabic Learning': sum(p.get('time_spent', 0) for p in self.timing_projects 
-                                            if 'arabic' in p.get('name', '').lower() or 
-                                            'duolingo' in p.get('name', '').lower())
-                }
-            }
-            suggestion = suggest_time_adjustments(timing_data, self.priorities)
+        if timing_analysis and self.priorities:
+            comparison = self.review_data.get('timing_comparison', {})
+            suggestion = suggest_time_adjustments(comparison, self.priorities)
             if suggestion:
                 print(suggestion)
         
@@ -820,8 +855,9 @@ Items captured: {self.review_data['items_captured']}"""
         with open(filepath, 'w') as f:
             json.dump(validated_data, f, indent=2)
         
-        # Create session summary in memory
-        self.loop.create_task(self.memory.create_session_summary(self.review_data))
+        # Create session summary in memory with timing data
+        timing_data = self.review_data.get('timing_analysis')
+        self.loop.create_task(self.memory.create_session_summary(self.review_data, timing_data))
         
         # Run all pending async tasks before saving
         pending = [task for task in asyncio.all_tasks(self.loop) if not task.done()]

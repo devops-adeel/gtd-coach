@@ -15,6 +15,8 @@ from collections import Counter, defaultdict
 
 from graphiti_integration import GraphitiRetriever
 from adhd_patterns import ADHDPatternDetector
+from timing_integration import TimingAPI
+from timing_comparison import compare_time_with_priorities, format_comparison_report
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ class WeeklySummaryGenerator:
     def __init__(self):
         self.retriever = GraphitiRetriever()
         self.pattern_detector = ADHDPatternDetector()
+        self.timing_api = TimingAPI()
         self.summary_data = {
             "period": {
                 "start": None,
@@ -55,6 +58,12 @@ class WeeklySummaryGenerator:
                 "average_session_duration": 0,
                 "phase_efficiency": {}
             },
+            "timing_analysis": {
+                "focus_score": None,
+                "switches_per_hour": None,
+                "alignment_score": None,
+                "time_comparison": None
+            },
             "adhd_insights": []
         }
     
@@ -76,6 +85,7 @@ class WeeklySummaryGenerator:
         await self._gather_session_data(days)
         await self._analyze_patterns(days)
         await self._analyze_mindsweep_trends(days)
+        await self._analyze_timing_data(days)
         await self._calculate_productivity_metrics()
         await self._generate_adhd_insights()
         
@@ -230,6 +240,50 @@ class WeeklySummaryGenerator:
                     "sessions": len(durations)
                 }
     
+    async def _analyze_timing_data(self, days: int) -> None:
+        """Analyze timing data and correlations"""
+        if not self.timing_api.is_configured():
+            return
+        
+        try:
+            # Fetch timing analysis
+            timing_data = await self.timing_api.analyze_timing_patterns_async()
+            
+            if timing_data and timing_data.get('focus_metrics'):
+                # Store focus metrics
+                self.summary_data["timing_analysis"]["focus_score"] = timing_data['focus_metrics'].get('focus_score')
+                self.summary_data["timing_analysis"]["switches_per_hour"] = timing_data['focus_metrics'].get('switches_per_hour')
+                
+                # Analyze ADHD patterns from timing
+                adhd_analysis = self.pattern_detector.analyze_timing_switches(timing_data)
+                
+                # Store timing-specific patterns
+                for indicator in adhd_analysis.get('adhd_indicators', []):
+                    if indicator['type'] == 'excessive_switching':
+                        self.summary_data["patterns"]["task_switches"].append({
+                            'source': 'timing',
+                            'severity': indicator['severity'],
+                            'value': indicator['value']
+                        })
+                
+                # Get priorities from most recent session for comparison
+                if self.summary_data["sessions"]:
+                    latest_session = self.summary_data["sessions"][0]
+                    priorities = latest_session["data"].get("priorities", [])
+                    
+                    if priorities and timing_data.get('projects'):
+                        # Compare time with priorities
+                        comparison = compare_time_with_priorities(
+                            timing_data['projects'],
+                            priorities,
+                            timing_data
+                        )
+                        self.summary_data["timing_analysis"]["alignment_score"] = comparison['alignment_score']
+                        self.summary_data["timing_analysis"]["time_comparison"] = comparison
+        
+        except Exception as e:
+            logger.error(f"Failed to analyze timing data: {e}")
+    
     async def _generate_adhd_insights(self) -> None:
         """Generate ADHD-specific insights from patterns"""
         insights = []
@@ -292,6 +346,38 @@ class WeeklySummaryGenerator:
                 "severity": "low"
             })
         
+        # Timing-based insights
+        timing_analysis = self.summary_data["timing_analysis"]
+        if timing_analysis.get("focus_score") is not None:
+            focus_score = timing_analysis["focus_score"]
+            if focus_score < 40:
+                insights.append({
+                    "type": "low_timing_focus",
+                    "message": f"Timing data shows focus score of {focus_score} - severe context switching detected",
+                    "severity": "high"
+                })
+            elif focus_score > 70:
+                insights.append({
+                    "type": "good_timing_focus",
+                    "message": f"Strong focus score of {focus_score} from Timing data",
+                    "severity": "positive"
+                })
+        
+        if timing_analysis.get("alignment_score") is not None:
+            alignment = timing_analysis["alignment_score"]
+            if alignment < 40:
+                insights.append({
+                    "type": "poor_alignment",
+                    "message": f"Only {alignment:.0f}% of time spent on stated priorities",
+                    "severity": "high"
+                })
+            elif alignment > 70:
+                insights.append({
+                    "type": "good_alignment",
+                    "message": f"Excellent: {alignment:.0f}% of time aligned with priorities",
+                    "severity": "positive"
+                })
+        
         self.summary_data["adhd_insights"] = insights
     
     def _format_markdown_report(self) -> str:
@@ -330,6 +416,41 @@ class WeeklySummaryGenerator:
             report.append("\n### Common Themes")
             report.append(", ".join(analysis["common_themes"][:5]))
         
+        # Timing Analysis (if available)
+        timing_analysis = self.summary_data["timing_analysis"]
+        if timing_analysis.get("focus_score") is not None:
+            report.append("\n## ⏱️ Timing App Analysis\n")
+            
+            # Focus metrics
+            report.append("### Focus Metrics")
+            focus_score = timing_analysis["focus_score"]
+            emoji = "🟢" if focus_score > 70 else "🟡" if focus_score > 40 else "🔴"
+            report.append(f"- **Focus Score**: {emoji} {focus_score}/100")
+            
+            if timing_analysis.get("switches_per_hour") is not None:
+                report.append(f"- **Context Switches**: {timing_analysis['switches_per_hour']:.1f}/hour")
+            
+            # Alignment analysis
+            if timing_analysis.get("alignment_score") is not None:
+                report.append("\n### Priority Alignment")
+                alignment = timing_analysis["alignment_score"]
+                emoji = "✅" if alignment > 70 else "⚠️" if alignment > 40 else "❌"
+                report.append(f"- **Alignment Score**: {emoji} {alignment:.0f}%")
+            
+            # Time comparison details
+            if timing_analysis.get("time_comparison"):
+                comparison = timing_analysis["time_comparison"]
+                
+                if comparison.get("time_sinks"):
+                    report.append("\n### Major Time Sinks")
+                    for sink in comparison["time_sinks"][:3]:
+                        report.append(f"- {sink['name']}: {sink['time_spent']:.1f}h ({sink.get('category', 'other')})")
+                
+                if comparison.get("recommendations"):
+                    report.append("\n### Time Management Recommendations")
+                    for rec in comparison["recommendations"][:3]:
+                        report.append(f"- {rec}")
+        
         # ADHD Patterns
         report.append("\n## 🎯 ADHD Pattern Analysis\n")
         
@@ -337,17 +458,27 @@ class WeeklySummaryGenerator:
         switches = self.summary_data["patterns"]["task_switches"]
         if switches:
             report.append(f"### Task Switching")
-            report.append(f"- **Total Switches**: {len(switches)}")
+            
+            # Separate timing vs mindsweep switches
+            timing_switches = [s for s in switches if s.get('source') == 'timing']
+            mindsweep_switches = [s for s in switches if s.get('source') != 'timing']
+            
+            if timing_switches:
+                report.append(f"- **From Timing Data**: {len(timing_switches)} patterns detected")
+            if mindsweep_switches:
+                report.append(f"- **From Mind Sweep**: {len(mindsweep_switches)} switches")
             
             # Most common switch patterns
             switch_patterns = Counter()
             for switch in switches:
-                pattern = f"{switch.get('from_topic', 'unknown')} → {switch.get('to_topic', 'unknown')}"
-                switch_patterns[pattern] += 1
+                if 'from_topic' in switch:
+                    pattern = f"{switch.get('from_topic', 'unknown')} → {switch.get('to_topic', 'unknown')}"
+                    switch_patterns[pattern] += 1
             
-            report.append("- **Common Patterns**:")
-            for pattern, count in switch_patterns.most_common(3):
-                report.append(f"  - {pattern}: {count} times")
+            if switch_patterns:
+                report.append("- **Common Patterns**:")
+                for pattern, count in switch_patterns.most_common(3):
+                    report.append(f"  - {pattern}: {count} times")
         
         # Coherence scores
         coherence_scores = self.summary_data["patterns"]["coherence_scores"]

@@ -25,13 +25,16 @@ Due to Python environment management, all Python scripts should be run through D
 # Run weekly review in Docker
 ./docker-run.sh
 
-# Test Timing app integration (NEW)
+# Test Timing app integration (NEW - ENHANCED)
 ./docker-run.sh timing
+
+# Test full Timing + Graphiti integration
+docker compose run gtd-coach python3 test_timing_graphiti_integration.py
 
 # Test Langfuse integration
 ./docker-run.sh test
 
-# Generate weekly summary
+# Generate weekly summary (NOW WITH TIMING INSIGHTS)
 ./docker-run.sh summary
 
 # Build/rebuild Docker image (required after dependency changes)
@@ -44,7 +47,7 @@ Due to Python environment management, all Python scripts should be run through D
 docker compose up gtd-coach            # Run review
 docker compose run gtd-coach python3 test_timing_integration.py  # Test Timing
 docker compose run test-langfuse       # Test Langfuse
-docker compose run generate-summary    # Generate summary
+docker compose run generate-summary    # Generate summary with Timing data
 ```
 
 ## Architecture
@@ -62,26 +65,32 @@ The system follows a **Phase-Based State Machine** with strict time boxing:
 - **start-coach.sh**: Handles LM Studio server lifecycle and model loading (now includes Langfuse health check)
 - **scripts/timer.sh**: Standalone timer with audio alerts at 50%, 20%, and 10% remaining
 - **prompts/**: System prompts (full vs simple) for ADHD-optimized coaching
-- **graphiti_integration.py**: Async memory management with episode batching
-- **adhd_patterns.py**: ADHD pattern detection algorithms
-- **generate_summary.py**: Weekly insights generator
+- **graphiti_integration.py**: Async memory management with episode batching and Timing data storage
+- **adhd_patterns.py**: ADHD pattern detection algorithms (enhanced with Timing analysis)
+- **generate_summary.py**: Weekly insights generator with Timing focus metrics
 - **langfuse_tracker.py**: Langfuse integration for LLM performance monitoring
 - **test_langfuse.py**: Validation script for Langfuse connectivity and scoring
+- **timing_integration.py**: Timing API client with context switch detection and focus scoring
+- **timing_comparison.py**: Smart correlation between Timing projects and GTD priorities
+- **test_timing_graphiti_integration.py**: Integration test for Timing + Graphiti flow
 
 ### Data Flow
 ```
 User Input → Python Orchestrator → LM Studio API → Llama Model → Structured Response → JSON Logging
-                     ↓                    ↓
-             Graphiti Memory (Async)  Langfuse Observability
-                     ↓                    ↓
-          Pattern Detection & Analysis  Performance Metrics
+     ↓               ↓                    ↓
+Timing API    Graphiti Memory      Langfuse Observability
+     ↓               ↓                    ↓
+Focus Metrics  Pattern Detection   Performance Metrics
+     ↓               ↓                    ↓
+     └──────→ Enhanced Weekly Summary ←──────┘
 ```
 
 All data is persisted in:
 - `data/`: Mindsweep captures, priorities, and Graphiti batches (JSON format with timestamps)
-- `logs/`: Complete review session transcripts
-- `summaries/`: AI-generated weekly insights (Markdown format)
+- `logs/`: Complete review session transcripts with Timing analysis
+- `summaries/`: AI-generated weekly insights with focus scores (Markdown format)
 - **Langfuse UI**: LLM performance metrics, traces, and quality scores (when configured)
+- **Graphiti Episodes**: Include Timing focus metrics and context switch patterns
 
 ### API Integration
 - LM Studio server: `http://localhost:1234/v1/chat/completions`
@@ -186,7 +195,7 @@ cp langfuse_tracker.py.example langfuse_tracker.py
 # - LANGFUSE_SECRET_KEY = "sk-lf-..."  # Your secret key
 ```
 
-## Timing App Integration ✅ VERIFIED WORKING
+## Timing App Integration ✅ ENHANCED WITH FOCUS TRACKING
 
 ### Setup
 1. Copy `.env.example` to `.env`
@@ -197,33 +206,56 @@ cp langfuse_tracker.py.example langfuse_tracker.py
    TIMING_MIN_MINUTES=30  # Optional: minimum project time threshold (default: 30)
    ```
 
-### How It Works
-- **Pre-fetching**: During STARTUP phase (2 min), the system fetches last week's project data
-- **Smart Filtering**: Only shows projects with >30 minutes (configurable via TIMING_MIN_MINUTES)
-- **Fallback**: Uses mock data if API unavailable, maintaining ADHD time constraints
-- **Organization Guidance**: Detects auto-generated app names and suggests improvements
-- **Performance**: API response typically <1 second, well within the 3-second timeout
+### New Features (August 2025)
+- **Focus Score Calculation**: 0-100 score based on context switch frequency
+- **Context Switch Detection**: Tracks switches <5 minutes between projects
+- **Hyperfocus Detection**: Identifies periods >30 minutes on single project
+- **Scatter Period Analysis**: Detects rapid app-hopping (3+ switches in 15 min)
+- **Priority Alignment**: Correlates time spent with GTD priorities
+- **Smart Project Matching**: AI-powered correlation between Timing and GTD items
+- **Time Sink Identification**: Categorizes unplanned time (browsing, communication, etc.)
 
-### Verified Working (2025-08-09)
-- Successfully fetches real project data (e.g., Web Browsing: 10.9h, Communication: 8.6h)
-- Correctly filters projects by time threshold
-- Gracefully handles API errors with fallback to mock data
-- Integrates seamlessly with all 5 GTD review phases
+### How It Works
+```mermaid
+graph LR
+    A[Timing API] -->|Fetch entries| B[Context Analysis]
+    B -->|Detect switches| C[Focus Score]
+    C -->|Store in| D[Graphiti Memory]
+    D -->|Generate| E[Weekly Insights]
+```
+
+- **Pre-fetching**: During STARTUP phase, fetches detailed time entries
+- **Analysis**: During WRAP-UP phase, calculates focus metrics
+- **Memory Storage**: Saves patterns to Graphiti for trend analysis
+- **Weekly Summary**: Includes focus scores and alignment metrics
+
+### Key Metrics
+| Metric | Description | ADHD Relevance |
+|--------|-------------|----------------|
+| **Focus Score** | 0-100 rating | Higher = fewer context switches |
+| **Switches/Hour** | Context switch frequency | <3 good, >10 concerning |
+| **Alignment %** | Time on priorities | Shows intention vs reality |
+| **Hyperfocus Score** | Deep work capability | Leverage these periods |
 
 ### Testing Commands
 ```bash
-# Always use Docker/OrbStack for Python scripts
-./docker-run.sh timing  # Test Timing integration (verified working)
-./docker-run.sh build   # Rebuild after adding .env file
-./docker-run.sh         # Run full review with real Timing data
+# Test basic Timing integration
+./docker-run.sh timing
+
+# Test full Timing + Graphiti flow
+docker compose run gtd-coach python3 test_timing_graphiti_integration.py
+
+# Run review with focus analysis
+./docker-run.sh
+
+# Generate summary with Timing insights
+./docker-run.sh summary
 ```
 
-### API Parameters (Corrected)
-The Timing API requires specific parameter names:
-- `start_date_min` and `start_date_max` (not `start_date`/`end_date`)
-- `columns[]`: 'project' (array notation required)
-- `include_project_data`: 1 (to get full project details)
-- Removed `timespan_grouping_mode` (was causing 422 errors)
+### API Endpoints Used
+- `/time-entries`: Individual time entries for context analysis
+- `/report`: Aggregated project summaries for overview
+- Parameters optimized for 3-second timeout constraint
 
 ## Future Enhancement Opportunities
 

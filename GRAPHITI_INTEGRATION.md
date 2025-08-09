@@ -1,59 +1,123 @@
-# Graphiti Memory Integration for GTD Coach
+# 🧠 Graphiti Memory Integration for GTD Coach
 
-## Overview
+## 🌟 Overview
 
 This integration adds agentic memory capabilities to the GTD Coach using Zep's Graphiti. It tracks:
-- Recurring patterns in mind sweep items
-- Personal productivity insights  
-- ADHD behavioral patterns (task switching and focus indicators)
+- 📝 Recurring patterns in mind sweep items
+- 📊 Personal productivity insights  
+- 🎯 ADHD behavioral patterns (task switching and focus indicators)
+- ⏱️ **NEW: Timing app data (focus scores, context switches)**
+- 🔄 **NEW: Priority alignment analysis**
 
-## Architecture
+## 🏗️ Architecture
 
-### Components Created
+### Components
 
-1. **`graphiti_integration.py`** - Memory management interface
+```mermaid
+graph TD
+    A[Timing App] -->|API| B[timing_integration.py]
+    B -->|Focus Data| C[adhd_patterns.py]
+    C -->|Patterns| D[graphiti_integration.py]
+    D -->|Episodes| E[Graphiti Memory]
+    E -->|Insights| F[generate_summary.py]
+    F -->|Weekly Report| G[You!]
+    
+    style A fill:#74c0fc
+    style D fill:#ffd43b
+    style G fill:#51cf66
+```
+
+### Core Components
+
+1. **📁 `graphiti_integration.py`** - Memory management
    - Async episode queuing and batching
    - Phase transition tracking
    - Behavior pattern recording
+   - **NEW: Timing data storage**
    - Session summary generation
 
-2. **`adhd_patterns.py`** - ADHD pattern detection
+2. **🧩 `adhd_patterns.py`** - ADHD pattern detection
    - Mindsweep coherence analysis
    - Task switching detection
    - Focus quality scoring
-   - Linguistic marker analysis
+   - **NEW: Timing pattern correlation**
+   - **NEW: Context switch analysis**
 
-3. **`generate_summary.py`** - Weekly insights generator
+3. **⏱️ `timing_integration.py`** - Timing app interface
+   - **NEW: Focus score calculation (0-100)**
+   - **NEW: Context switch detection (<5 min)**
+   - **NEW: Hyperfocus/scatter identification**
+   - **NEW: Project time aggregation**
+
+4. **📊 `generate_summary.py`** - Weekly insights
    - Queries last 7 days of data
-   - Analyzes patterns and trends
+   - **NEW: Timing metrics analysis**
+   - **NEW: Priority alignment scoring**
    - Generates markdown reports
-   - Provides ADHD-specific insights
+   - ADHD-specific recommendations
 
-4. **GTD Coach Enhancements**
+5. **🤖 GTD Coach Enhancements**
    - Non-blocking memory capture
    - Real-time pattern detection
+   - **NEW: Focus score display**
    - Automatic session summaries
 
-## How It Works
+## 🔄 How It Works
 
 ### During Review Sessions
 
-1. **Real-time Capture**: As you interact with the coach, all conversations are asynchronously captured
-2. **Pattern Detection**: During mind sweep, the system detects:
-   - Topic switches between items
-   - Coherence scores
-   - Fragmentation indicators
-3. **Phase Tracking**: Each phase transition is recorded with timing data
-4. **Batch Processing**: Data is flushed to disk after each phase to avoid performance impact
+1. **🎬 Startup Phase**
+   - Fetches last week's Timing data
+   - Pre-calculates focus metrics
+   - Loads into memory for fast access
 
-### Data Storage (Temporary)
+2. **📝 Real-time Capture**: All interactions asynchronously captured
+   - Conversation text
+   - Response times
+   - Phase transitions
+   - **NEW: Timing context**
 
-Currently stores data as JSON files in `~/gtd-coach/data/`:
-- `graphiti_batch_*.json` - Episode batches for Graphiti
-- `mindsweep_*.json` - Mind sweep items
-- `priorities_*.json` - Prioritized actions
+3. **🔍 Pattern Detection**: 
+   - **Mind Sweep**: Topic switches, coherence scores
+   - **Timing Data**: Context switches, focus periods
+   - **Correlation**: Links actual time to intended priorities
 
-When MCP integration is complete, these will be sent directly to Graphiti.
+4. **💾 Batch Processing**: 
+   - Data flushed after each phase
+   - No performance impact
+   - Timing analysis runs async
+
+5. **🎊 Wrap-up Display**:
+   ```
+   📊 Your Focus Score: 73/100
+   ✅ Priority Alignment: 68%
+   ```
+
+### 💾 Data Storage
+
+Stored as JSON files in `~/gtd-coach/data/`:
+
+| File Pattern | Contains | Example Data |
+|-------------|----------|-------------|
+| `graphiti_batch_*.json` | Episode batches | Patterns, behaviors, timing |
+| `mindsweep_*.json` | Mind sweep items | Raw brain dump |
+| `priorities_*.json` | A/B/C priorities | Ranked actions |
+| `timing_analysis.json` | **NEW: Focus metrics** | Switches, scores, alignment |
+
+#### Sample Timing Episode:
+```json
+{
+  "type": "timing_analysis",
+  "phase": "WRAP_UP",
+  "data": {
+    "focus_score": 73,
+    "switches_per_hour": 4.2,
+    "alignment_percentage": 68,
+    "top_time_sinks": ["Web Browsing: 11.8h"]
+  },
+  "timestamp": "2025-08-09T10:00:00Z"
+}
+```
 
 ### Weekly Summaries
 
@@ -116,26 +180,68 @@ python3 ~/gtd-coach/test_graphiti_integration.py
    - Provide personalized guidance based on history
    - Suggest improvements based on trends
 
-## ADHD Pattern Detection Details
+## 🧠 ADHD Pattern Detection Details
 
-### Coherence Analysis
-- **High coherence (>0.7)**: Items stay on topic, well-organized thoughts
-- **Low coherence (<0.5)**: Fragmented thinking, multiple topic switches
+### 📊 Enhanced Metrics with Timing Integration
 
-### Task Switching
-- Detects when consecutive items change topics
-- Tracks frequency and abruptness of switches
-- Identifies common switching patterns
+```mermaid
+graph LR
+    A[Mind Sweep Data] --> D[Combined Score]
+    B[Timing Data] --> D
+    C[Review Behavior] --> D
+    D --> E[ADHD Insights]
+    
+    style A fill:#ffd43b
+    style B fill:#74c0fc
+    style E fill:#51cf66
+```
 
-### Focus Indicators
-- Response time consistency
-- Task completion rates
-- Time efficiency per phase
-- Clarification request frequency
+### 🎯 Coherence Analysis
+| Score | Meaning | Timing Correlation |
+|-------|---------|-------------------|
+| >0.7 | High coherence | Usually 60+ focus score |
+| 0.5-0.7 | Moderate | Mixed focus periods |
+| <0.5 | Fragmented | High context switching |
 
-## Privacy and Data
+### 🔄 Context Switching (NEW)
+| Metric | Source | What It Means |
+|--------|--------|---------------|
+| **Mind Sweep Switches** | GTD Review | Topic changes in thoughts |
+| **App Switches** | Timing App | <5 min between apps |
+| **Combined Pattern** | Both | Full ADHD picture |
 
-- All data stays local on your machine
-- Session IDs are timestamped for easy management
-- No personal data is sent to external services
-- When using MCP/Graphiti, data remains in your configured Neo4j instance
+### ⚡ Focus Indicators
+- **Response time consistency** (GTD)
+- **Task completion rates** (GTD)
+- **Time blocks >30 min** (Timing)
+- **Scatter periods** (Timing)
+- **Priority alignment %** (Combined)
+
+## 🔒 Privacy and Data
+
+- ✅ All data stays local on your machine
+- ✅ Session IDs are timestamped for easy management
+- ✅ No personal data is sent to external services
+- ✅ Timing API calls are read-only
+- ✅ When using MCP/Graphiti, data remains in your configured Neo4j instance
+
+## 📈 Success Metrics
+
+You're improving if:
+- 📊 Focus score trends upward (even slowly)
+- 🎯 Alignment % increases week-over-week
+- 🔄 Fewer scatter periods over time
+- ⚡ More hyperfocus periods detected
+- 🧠 Coherence scores stabilize
+
+## 🚀 Next Steps
+
+1. **Enable Timing**: Add API key to `.env`
+2. **Run Reviews**: Build up data over weeks
+3. **Check Summaries**: `./docker-run.sh summary`
+4. **Track Progress**: Watch trends, not single scores
+5. **Iterate**: Adjust based on insights
+
+---
+
+*Remember: This is about understanding your ADHD brain, not judging it!* 🧠💙

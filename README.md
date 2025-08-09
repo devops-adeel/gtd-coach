@@ -1,312 +1,247 @@
-# GTD Coach for ADHD
+# 🧠 GTD Coach for ADHD
 
-A structured, time-boxed weekly review system powered by LM Studio and designed specifically for ADHD minds.
+**30-minute weekly reviews that actually work for ADHD brains**
 
-## Quick Start
+> 🎯 **Quick Start**: [Jump to 3-step setup](#-quick-start-3-steps) | 📖 [Usage Guide](USAGE_GUIDE.md) | 🔧 [Troubleshooting](#-troubleshooting)
 
-```bash
-# Start the coach system
-~/gtd-coach/start-coach.sh
+## 🌟 What It Does
 
-# Or manually start review if server is already running
-python3 ~/gtd-coach/gtd-review.py
-
-# Generate weekly summary after reviews
-python3 ~/gtd-coach/generate_summary.py
+```mermaid
+graph LR
+    A[😵 Overwhelmed] --> B[🤖 GTD Coach]
+    B --> C[📝 Capture Everything]
+    C --> D[🎯 Prioritize]
+    D --> E[😌 Clarity]
+    
+    style A fill:#ff6b6b
+    style E fill:#51cf66
+    style B fill:#339af0
 ```
 
-## Installation
+**GTD Coach** gives you an AI-powered executive function assistant that:
+- ⏱️ **Time-boxes everything** (30 minutes max)
+- 🔊 **Audio alerts** keep you on track
+- 📊 **Tracks your patterns** to improve over time
+- 🎯 **Focus scoring** from your Timing app data
+- 🤝 **ADHD-optimized** prompting and pacing
 
-### Core Requirements
-- LM Studio with Llama 3.1 8B model
-- macOS (for audio alerts with native Python)
-- Python 3.8+ (for native installation) OR Docker/OrbStack (recommended)
+## 🚀 Quick Start (3 Steps)
 
-### Installation Methods
-
-#### Method 1: Docker/OrbStack (Recommended)
-Use this method to avoid Python environment issues:
-
-**Prerequisites:**
-- [OrbStack](https://orbstack.dev/) or Docker Desktop
-- LM Studio running on localhost:1234
-- (Optional) Langfuse running on localhost:3000
-
+### Step 1: Install LM Studio
 ```bash
-# First-time setup: build the Docker image
-./docker-run.sh build
-
-# Run the weekly review
-./docker-run.sh
-
-# Test Langfuse integration
-./docker-run.sh test
-
-# Generate weekly summary
-./docker-run.sh summary
+# Download from: https://lmstudio.ai
+# Load model: meta-llama-3.1-8b-instruct
 ```
 
-**Benefits:**
-- ✅ Avoids "externally managed environment" Python errors
-- ✅ Uses host networking to connect to LM Studio and Langfuse
-- ✅ Preserves all your data in local directories
-- ✅ Handles audio alerts gracefully (disabled in container)
-
-#### Method 2: Native Python Installation
-If you have a properly configured Python environment:
-
+### Step 2: Get GTD Coach
 ```bash
-# Clone the repository
 git clone https://github.com/devops-adeel/gtd-coach.git
 cd gtd-coach
+```
 
-# Install dependencies (optional, for Langfuse support)
+### Step 3: Start Your Review
+```bash
+./start-coach.sh
+```
+
+That's it! 🎉
+
+## 📦 Installation Options
+
+<details>
+<summary><b>🐳 Docker/OrbStack (Recommended)</b> - Click to expand</summary>
+
+### Why Docker?
+✅ No Python issues  
+✅ Works everywhere  
+✅ Clean setup  
+
+### Setup
+```bash
+# Install OrbStack: https://orbstack.dev
+
+# Build once
+./docker-run.sh build
+
+# Run review
+./docker-run.sh
+```
+
+### Docker Commands
+| Command | What it does |
+|---------|-------------|
+| `./docker-run.sh` | Run weekly review |
+| `./docker-run.sh timing` | Test Timing integration |
+| `./docker-run.sh summary` | Generate weekly insights |
+| `./docker-run.sh test` | Test Langfuse tracking |
+
+</details>
+
+<details>
+<summary><b>🐍 Native Python</b> - Click to expand</summary>
+
+### Requirements
+- Python 3.8+
+- macOS (for audio alerts)
+- pip packages
+
+### Setup
+```bash
+# Install dependencies
 pip install -r requirements.txt
 
 # Run directly
 python3 gtd-review.py
 ```
 
-## Features
+</details>
 
-- **Strict 30-minute time limit** with phase-based structure
-- **Audio alerts** at key time intervals (50%, 20%, 10% remaining)
-- **ADHD-optimized prompting** - directive, structured, time-aware
-- **Automatic logging** of all reviews for pattern tracking
-- **Graphiti memory integration** - Tracks patterns, behaviors, and productivity insights
-- **Timing app integration** - Automatically loads your real project data from last week
-- **Weekly summaries** - AI-generated reports with ADHD-specific insights
-- **Simple timer utility** for other time-boxing needs
+## ✨ Features at a Glance
 
-## Directory Structure
+| Feature | What it does | Why it helps ADHD |
+|---------|--------------|-------------------|
+| **⏰ Time Boxing** | 30-min reviews | Prevents hyperfocus |
+| **🔊 Audio Alerts** | Progress warnings | External reminders |
+| **📊 Focus Score** | 0-100 rating | Track improvement |
+| **🧠 Memory** | Pattern tracking | Learn your habits |
+| **⏱️ Timing Integration** | Real project data | See where time goes |
+| **📈 Weekly Summaries** | AI insights | Spot trends |
+
+## 🔄 How It Works
+
+```mermaid
+graph TD
+    A[Start: 2 min] -->|Welcome| B[Mind Sweep: 10 min]
+    B -->|Capture everything| C[Projects: 12 min]
+    C -->|Next actions| D[Prioritize: 5 min]
+    D -->|ABC ranking| E[Wrap-up: 3 min]
+    E -->|Save & celebrate| F[Done! 🎉]
+    
+    style A fill:#74c0fc
+    style B fill:#ffd43b
+    style C fill:#ff8787
+    style D fill:#69db7c
+    style E fill:#9775fa
+    style F fill:#51cf66
+```
+
+### Phase Breakdown
+
+| Phase | Time | What You Do |
+|-------|------|------------|
+| 🚀 **Startup** | 2 min | Get ready, load projects |
+| 🧹 **Mind Sweep** | 10 min | Dump everything from brain |
+| 📋 **Projects** | 12 min | Quick next-action decisions |
+| 🎯 **Prioritize** | 5 min | A/B/C ranking |
+| 🎊 **Wrap-up** | 3 min | Save & celebrate |
+
+## 🔗 Integrations
+
+### ⏱️ Timing App
+<details>
+<summary>Track where your time actually goes - Click to setup</summary>
+
+1. **Get API Key**: [web.timingapp.com](https://web.timingapp.com)
+2. **Configure**: 
+   ```bash
+   cp .env.example .env
+   # Add: TIMING_API_KEY=your-key-here
+   ```
+3. **Test**: `./docker-run.sh timing`
+
+**What you get:**
+- 📊 Focus score (0-100)
+- 🔄 Context switch tracking
+- ⚡ Priority alignment %
+- 🎯 Time sink identification
+
+</details>
+
+### 📈 Langfuse (Optional)
+<details>
+<summary>Track AI performance - Click to setup</summary>
+
+1. **Run Langfuse**: 
+   ```bash
+   docker run -p 3000:3000 langfuse/langfuse
+   ```
+2. **Configure**:
+   ```bash
+   cp langfuse_tracker.py.example langfuse_tracker.py
+   # Add your keys
+   ```
+3. **View**: http://localhost:3000
+
+</details>
+
+## 🆘 Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| **"LM Studio not running"** | Run: `lms server start` |
+| **"Model not loaded"** | Run: `lms load meta-llama-3.1-8b-instruct` |
+| **"No timing data"** | Check `.env` has `TIMING_API_KEY` |
+| **"Python errors"** | Use Docker: `./docker-run.sh` |
+
+## 📁 What Gets Saved
 
 ```
 ~/gtd-coach/
-├── scripts/
-│   └── timer.sh                # Standalone timer with audio alerts
-├── prompts/
-│   └── system-prompt.txt       # ADHD coach personality
-├── data/
-│   ├── mindsweep_*.json        # Captured items from reviews
-│   ├── priorities_*.json       # Prioritized actions
-│   └── graphiti_batch_*.json   # Memory episodes for Graphiti
-├── logs/
-│   └── review_*.json           # Complete review transcripts
-├── summaries/
-│   └── weekly_summary_*.md     # AI-generated weekly insights
-├── gtd-review.py               # Main review orchestrator
-├── graphiti_integration.py     # Memory management interface
-├── adhd_patterns.py            # ADHD pattern detection
-├── generate_summary.py         # Weekly insights generator
-├── start-coach.sh              # One-command startup
-└── README.md                   # This file
+├── 📝 data/           # Your captured items
+├── 📊 logs/           # Review transcripts  
+├── 💡 summaries/      # Weekly insights
+└── 🧠 graphiti/       # Memory & patterns
 ```
 
-## Review Phases
+## 🎯 Tips for ADHD Success
 
-1. **STARTUP (2 min)** - Welcome and setup
-2. **MIND SWEEP (10 min)** - Capture everything on your mind
-3. **PROJECT REVIEW (12 min)** - Quick next-action decisions
-4. **PRIORITIZATION (5 min)** - ABC priority assignment
-5. **WRAP-UP (3 min)** - Save and celebrate
+### Before Review
+- ☕ **Caffeine**: Have it ready
+- 📱 **Phone**: Different room
+- 🚶 **Movement**: Stand or walk
 
-## Memory & Pattern Tracking
+### During Review
+- ⏰ **Trust timers**: They're your friend
+- 📝 **Brain dump**: Don't filter
+- 🎯 **Good enough**: Perfect is the enemy
 
-The GTD Coach now includes Graphiti memory integration that automatically:
+### After Review
+- 🎉 **Celebrate**: You did it!
+- 📊 **Check insights**: `./docker-run.sh summary`
+- 📅 **Schedule next**: Same time next week
 
-- **Tracks behavioral patterns**: Task switching frequency, focus indicators, coherence scores
-- **Captures all interactions**: Every conversation with the coach is stored for analysis
-- **Detects ADHD patterns**: Based on linguistic markers from research
-- **Generates weekly summaries**: Actionable insights with personalized recommendations
+## 📚 Documentation
 
-### Viewing Your Insights
+| Guide | For When You... |
+|-------|-----------------|
+| [📖 Usage Guide](USAGE_GUIDE.md) | Want detailed instructions |
+| [⚡ Quick Reference](QUICK_REFERENCE.md) | Need a cheat sheet |
+| [⏱️ Timing Setup](TIMING_SETUP.md) | Want focus tracking |
+| [🧠 Memory System](GRAPHITI_INTEGRATION.md) | Curious about patterns |
+| [🔧 Troubleshooting](KNOWN_ISSUES.md) | Hit a snag |
 
-```bash
-# Generate a weekly summary (analyzes last 7 days)
-python3 ~/gtd-coach/generate_summary.py
+## 🚀 Latest Updates (August 2025)
 
-# View generated summaries
-ls ~/gtd-coach/summaries/
-```
+### ✅ New: Timing + Graphiti Integration
+- **Focus Scoring**: Real-time attention metrics
+- **Context Switching**: Track app-hopping patterns  
+- **Priority Alignment**: See if time matches goals
+- **ADHD Insights**: Personalized recommendations
 
-### What Gets Tracked
+### 🔄 What's Next?
+- [ ] Mobile app
+- [ ] Voice input
+- [ ] Real-time coaching
+- [ ] Team reviews
 
-1. **Mind Sweep Patterns**
-   - Topic distribution and switches
-   - Coherence scores (how organized your thoughts are)
-   - Common themes and recurring items
+## 💬 Getting Help
 
-2. **Productivity Metrics**
-   - Session completion rates
-   - Average duration per phase
-   - Items captured per session
+- **Issues**: [GitHub Issues](https://github.com/devops-adeel/gtd-coach/issues)
+- **Quick fixes**: See [Troubleshooting](#-troubleshooting)
+- **Details**: Check [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
 
-3. **ADHD Indicators**
-   - Task switching frequency
-   - Focus quality scores
-   - Fragmentation patterns
+---
 
-All tracking happens automatically in the background without impacting your review performance.
+**Remember**: A messy done review > perfect procrastination! 🎯
 
-## Timing App Integration
-
-The GTD Coach now automatically fetches your real project data from Timing.app:
-
-### Setup
-1. Copy `.env.example` to `.env`
-2. Get your API key from [web.timingapp.com](https://web.timingapp.com) (requires Timing Connect)
-3. Add to `.env`:
-   ```
-   TIMING_API_KEY=your-key-here
-   TIMING_MIN_MINUTES=30  # Only show projects with >30 min last week
-   ```
-
-### What It Does
-- **Automatic Loading**: Fetches your projects during review startup
-- **Smart Filtering**: Only shows projects with significant time investment
-- **Real Data**: Your actual project names and hours from last week
-- **Graceful Fallback**: Uses mock data if API unavailable
-
-### Testing
-```bash
-# Test Timing integration
-./docker-run.sh timing
-
-# Run full review with your projects
-./docker-run.sh
-```
-
-## LLM Performance Monitoring (Langfuse)
-
-The GTD Coach now includes optional Langfuse integration for tracking LLM performance:
-
-### What Gets Tracked
-
-- **Response Latency**: Time taken for each LLM response per phase
-- **Success/Failure Rates**: Track reliability and retry patterns
-- **Quality Scores**: Phase-specific response quality based on latency thresholds
-
-### Setup Langfuse Integration
-
-1. **Run Langfuse locally** (if using self-hosted):
-   ```bash
-   # With Docker/OrbStack
-   docker run -p 3000:3000 langfuse/langfuse
-   ```
-
-2. **Configure your keys**:
-   ```bash
-   # Copy the example file
-   cp langfuse_tracker.py.example langfuse_tracker.py
-   
-   # Edit with your actual keys
-   # Replace pk-lf-... and sk-lf-... with your actual keys
-   ```
-
-3. **Test the integration**:
-   ```bash
-   # Native Python
-   python3 ~/gtd-coach/test_langfuse.py
-   
-   # Or with Docker
-   ./docker-run.sh test
-   ```
-
-4. **Start your review** - Langfuse tracking is automatic when configured:
-   ```bash
-   # Native Python
-   ~/gtd-coach/start-coach.sh
-   
-   # Or with Docker
-   ./docker-run.sh
-   ```
-
-### Viewing Performance Data
-
-Access your Langfuse UI at http://localhost:3000 to see:
-- Session traces with nested phases
-- Latency breakdowns per interaction
-- Success/failure patterns
-- Quality score trends
-
-The integration gracefully falls back to direct API calls if Langfuse is unavailable.
-
-## Manual Timer Usage
-
-```bash
-# Basic timer
-~/gtd-coach/scripts/timer.sh 5 "Break time!"
-
-# Pomodoro work session
-~/gtd-coach/scripts/timer.sh 25 "Take a break!"
-```
-
-## Troubleshooting
-
-### "LM Studio server is not running"
-```bash
-lms server start
-```
-
-### "Model not loaded"
-```bash
-# List available models
-lms ls
-
-# Load the model
-lms load meta-llama-3.1-8b-instruct --gpu max
-```
-
-### Check what's loaded
-```bash
-lms ps
-```
-
-## Customization
-
-- Edit `prompts/system-prompt.txt` to adjust coaching style
-- Modify phase durations in `gtd-review.py`
-- Add custom sounds by editing `scripts/timer.sh`
-
-## Documentation
-
-- **[USAGE_GUIDE.md](USAGE_GUIDE.md)** - Complete guide on how to use the coach
-- **[QUICK_REFERENCE.txt](QUICK_REFERENCE.txt)** - Printable cheat sheet
-- **[SETUP_COMPLETE.md](SETUP_COMPLETE.md)** - Setup confirmation and next steps
-- **[KNOWN_ISSUES.md](KNOWN_ISSUES.md)** - Troubleshooting guide
-- **[GRAPHITI_INTEGRATION.md](GRAPHITI_INTEGRATION.md)** - Technical details of memory integration
-- **[LANGFUSE_INTEGRATION.md](LANGFUSE_INTEGRATION.md)** - LLM performance monitoring setup
-- **[DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)** - Docker/OrbStack deployment guide
-
-## Recent Enhancements (August 2025)
-
-- **Robust Error Handling**: Automatic retry with exponential backoff and fallback to simple prompts
-- **Comprehensive Logging**: Session-based logging with unique IDs for debugging and tracking
-- **Data Validation**: Automatic cleanup of empty entries and validation of priority values
-- **Optimized Phase Settings**: Each phase has tuned temperature and token limits for best results
-- **Enhanced Server Checks**: Detailed status about LM Studio server and loaded models
-- **Connection Pooling**: Better performance through HTTP keep-alive connections
-- **Graphiti Memory Integration**: Automatic pattern tracking, ADHD behavior detection, and weekly summaries
-- **ADHD Pattern Detection**: Research-based algorithms for task switching and focus analysis
-- **Langfuse Observability**: LLM performance tracking with latency monitoring and quality scoring
-
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md#recent-enhancements-august-2025) for details.
-
-## Future Enhancements
-
-- [x] Timing app integration for automatic project list (Implemented August 2025)
-- [x] Graphiti memory for pattern tracking (Implemented August 2025)
-- [ ] Review metrics dashboard
-- [ ] Cross-platform audio support (currently macOS only)
-- [ ] Custom MCP tools for advanced features
-- [ ] Real-time Graphiti MCP integration (currently using batch files)
-
-## Tips for ADHD Success
-
-1. **Same time, same place** - Schedule reviews consistently
-2. **Phone in another room** - Eliminate distractions
-3. **Stand up during review** - Movement helps focus
-4. **Trust the timer** - Let it be your external brain
-5. **Celebrate completion** - You showed up, that's what matters!
-
-Remember: A messy completed review beats a perfect abandoned one!
+*Built with ❤️ for ADHD brains by ADHD brains*

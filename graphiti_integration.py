@@ -181,12 +181,73 @@ class GraphitiMemory:
             self.pending_episodes = episodes_to_send + self.pending_episodes
             return 0
             
-    async def create_session_summary(self, review_data: Dict[str, Any]) -> None:
+    async def add_timing_analysis(self, timing_data: Dict[str, Any], 
+                                 adhd_analysis: Dict[str, Any]) -> None:
+        """
+        Add timing app analysis to memory
+        
+        Args:
+            timing_data: Analysis from TimingAPI.analyze_timing_patterns_async()
+            adhd_analysis: ADHD pattern analysis from timing data
+        """
+        episode_data = {
+            "type": "timing_analysis",
+            "phase": self.current_phase,
+            "data": {
+                "data_type": timing_data.get('data_type'),
+                "focus_metrics": timing_data.get('focus_metrics'),
+                "switch_summary": {
+                    "total_switches": timing_data.get('switch_analysis', {}).get('total_switches', 0),
+                    "switches_per_hour": timing_data.get('switch_analysis', {}).get('switches_per_hour', 0),
+                    "top_patterns": timing_data.get('switch_analysis', {}).get('switch_patterns', [])[:3]
+                },
+                "adhd_indicators": adhd_analysis.get('adhd_indicators', []),
+                "focus_profile": adhd_analysis.get('focus_profile', 'Unknown')
+            }
+        }
+        
+        await self.queue_episode(episode_data)
+        
+        # Also record significant patterns as behavior patterns
+        if adhd_analysis.get('patterns_detected'):
+            for indicator in adhd_analysis.get('adhd_indicators', []):
+                if indicator['severity'] in ['high', 'medium']:
+                    await self.add_behavior_pattern(
+                        pattern_type=f"timing_{indicator['type']}",
+                        phase=self.current_phase,
+                        pattern_data={
+                            'severity': indicator['severity'],
+                            'value': indicator['value'],
+                            'message': indicator['message']
+                        }
+                    )
+    
+    async def add_correlation_insights(self, correlation_data: Dict[str, Any]) -> None:
+        """
+        Add correlation insights between timing and mindsweep
+        
+        Args:
+            correlation_data: Results from correlate_timing_with_mindsweep
+        """
+        episode_data = {
+            "type": "correlation_insight",
+            "phase": self.current_phase,
+            "data": {
+                "correlations": correlation_data.get('correlations', []),
+                "overall_pattern": correlation_data.get('overall_pattern', 'Unknown')
+            }
+        }
+        
+        await self.queue_episode(episode_data)
+    
+    async def create_session_summary(self, review_data: Dict[str, Any],
+                                   timing_data: Optional[Dict[str, Any]] = None) -> None:
         """
         Create a summary episode for the entire session
         
         Args:
             review_data: Complete review data including metrics
+            timing_data: Optional timing analysis data
         """
         summary_data = {
             "type": "session_summary",
@@ -197,6 +258,15 @@ class GraphitiMemory:
                 "phases_completed": list(self.phase_start_times.keys())
             }
         }
+        
+        # Include timing summary if available
+        if timing_data and timing_data.get('focus_metrics'):
+            summary_data["data"]["timing_summary"] = {
+                "focus_score": timing_data['focus_metrics'].get('focus_score'),
+                "switches_per_hour": timing_data['focus_metrics'].get('switches_per_hour'),
+                "focus_periods": timing_data['focus_metrics'].get('focus_periods_count'),
+                "interpretation": timing_data['focus_metrics'].get('interpretation')
+            }
         
         await self.queue_episode(summary_data)
         await self.flush_episodes()

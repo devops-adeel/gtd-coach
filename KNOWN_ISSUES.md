@@ -1,6 +1,35 @@
-# Known Issues and Workarounds
+# 🔧 Known Issues and Workarounds
 
-## 1. Timeout with Large System Prompts (RESOLVED)
+> 🎯 **Quick Jump**: [Current Issues](#current-issues) | [Resolved Issues](#resolved-issues) | [Recent Enhancements](#-recent-enhancements-august-2025)
+
+## Current Issues
+
+### 🐍 Python Package Installation on macOS
+
+**Issue**: macOS requires `--break-system-packages` flag for pip installs.
+
+**Solution**:
+```bash
+pip3 install --user --break-system-packages requests
+```
+
+**Better Solution**: Use Docker! 🐳
+```bash
+./docker-run.sh build
+./docker-run.sh
+```
+
+### 💻 Interactive Input in Non-TTY Environment
+
+**Issue**: Script expects interactive input which fails in automated environments.
+
+**Workaround**: Run directly in terminal, not through automation tools.
+
+---
+
+## Resolved Issues
+
+### ✅ 1. Timeout with Large System Prompts (RESOLVED)
 
 **Previous Issue**: The full system prompt in `prompts/system-prompt.txt` could cause timeouts when sent to the LLM.
 
@@ -19,22 +48,33 @@ The system now includes robust error handling with automatic retry logic and fal
 
 No manual intervention required!
 
-## 2. Interactive Input in Non-TTY Environment
+### ✅ 2. Timing API Parameter Issue (RESOLVED - August 9, 2025)
 
-**Issue**: The script expects interactive input which fails in automated/scripted environments.
+**Previous Issue**: 422 errors from incorrect API parameters
 
-**Workaround**: Run the script directly in a terminal, not through automation tools.
-
-## 3. Python Package Installation
-
-**Issue**: macOS requires `--break-system-packages` flag for pip installs.
-
-**Solution**:
-```bash
-pip3 install --user --break-system-packages requests
+**Resolution**: Fixed parameter names:
+```diff
+- 'start_date': start_str      # ❌ Wrong
++ 'start_date_min': start_str  # ✅ Correct
+- 'timespan_grouping_mode'     # ❌ Invalid
+# Removed completely           # ✅ Fixed
 ```
 
-## Testing the System
+**Status**: ✅ Verified working with real data
+
+### ✅ 3. Graphiti Memory Initialization (RESOLVED - August 9, 2025)
+
+**Previous Issue**: Missing `current_phase` attribute in tests
+
+**Resolution**: Added proper initialization:
+```python
+memory = GraphitiMemory(session_id)
+memory.current_phase = "TEST"  # ✅ Fixed
+```
+
+---
+
+## 🧪 Testing the System
 
 For a quick connectivity test:
 ```bash
@@ -52,45 +92,63 @@ For the full interactive experience:
 python3 ~/gtd-coach/gtd-review.py
 ```
 
-## 4. Timing API Parameter Issue (RESOLVED - August 9, 2025)
+### Quick Test Commands
 
-**Previous Issue**: The Timing API integration was returning 422 errors due to incorrect parameter names.
+```bash
+# Test LM Studio connection
+python3 ~/gtd-coach/quick-test.py
 
-**Root Cause**: 
-- Used incorrect parameter `timespan_grouping_mode: 'none'` which is invalid
-- Used wrong date parameter names (`start_date`/`end_date` instead of `start_date_min`/`start_date_max`)
+# Test Timing integration
+./docker-run.sh timing
 
-**Resolution Implemented**:
-```python
-# Corrected parameters in timing_integration.py
-params = {
-    'start_date_min': start_str,
-    'start_date_max': end_str,
-    'columns[]': 'project',
-    'include_project_data': 1
-    # Removed invalid timespan_grouping_mode
-}
+# Test full integration
+docker compose run gtd-coach python3 test_timing_graphiti_integration.py
+
+# Non-interactive demo
+python3 ~/gtd-coach/demo-review.py
+
+# Full interactive review
+./start-coach.sh
 ```
 
-**Verification**: Successfully tested on August 9, 2025 with real data:
-- ✅ Fetches 6 projects with correct time calculations
-- ✅ Filters by 30-minute threshold as expected
-- ✅ API response <1 second
-- ✅ Graceful fallback to mock data on errors
+## 🚀 Recent Enhancements (August 2025)
 
-## Recent Enhancements (August 2025)
+### ⏱️ Timing + Graphiti Integration (August 9, 2025)
 
-### Timing App Integration (August 9, 2025)
-- Successfully integrated with Timing.app API
-- Automatically loads real project data during reviews
-- Smart filtering shows only projects with significant time investment
-- Verified working with production data
+#### What's New
+| Feature | Description | Impact |
+|---------|-------------|--------|
+| **Focus Scoring** | 0-100 score based on context switches | See your attention patterns |
+| **Context Detection** | Tracks <5 min app switches | Identify scatter periods |
+| **Priority Alignment** | Compares time vs intentions | Reality check |
+| **Pattern Memory** | Stores in Graphiti | Track trends over time |
+| **Smart Correlation** | AI matches projects to priorities | No manual mapping |
 
-### Error Handling Improvements
-1. **Automatic Retry Logic**: LLM requests retry up to 3 times with exponential backoff
-2. **Fallback System Prompt**: Automatically switches to simple prompt on final retry
-3. **Enhanced Server Checking**: Detailed status messages about LM Studio server and loaded models
-4. **Connection Pooling**: HTTP keep-alive for better performance
+#### Verified Working
+- ✅ Fetches real project data
+- ✅ Calculates focus metrics
+- ✅ Detects hyperfocus/scatter
+- ✅ Stores patterns in memory
+- ✅ Generates weekly insights
+
+### 🛡️ Error Handling Improvements
+
+```mermaid
+graph LR
+    A[Request Fails] --> B{Retry 1}
+    B -->|Fail| C{Retry 2}
+    C -->|Fail| D{Retry 3 + Simple Prompt}
+    D -->|Success| E[Continue]
+    D -->|Fail| F[Graceful Exit]
+    
+    style A fill:#ff6b6b
+    style E fill:#51cf66
+```
+
+- **3x Retry**: Exponential backoff (1s, 2s, 4s)
+- **Auto-Fallback**: Switches to simple prompt on final try
+- **Keep-Alive**: Connection pooling for speed
+- **Clear Messages**: Know exactly what's happening
 
 ### Logging System
 - Session logs are automatically created in `~/gtd-coach/logs/`
@@ -111,10 +169,27 @@ Each phase now has optimized settings:
 - **Prioritization**: temperature=0.6, max_tokens=400 (deterministic)
 - **Wrap-up**: temperature=0.9, max_tokens=400 (celebratory)
 
-### Testing
-Run the enhanced test suite:
-```bash
-python3 ~/gtd-coach/test-enhanced-gtd.py
-```
+---
 
-This tests all new features including validation, error handling, and logging.
+## 🆘 Troubleshooting Guide
+
+### Common Issues & Quick Fixes
+
+| Symptom | Likely Cause | Fix |
+|---------|--------------|-----|
+| **"No timing data"** | Missing API key | Add to `.env` |
+| **"LM Studio timeout"** | Model not loaded | `lms load meta-llama-3.1-8b-instruct` |
+| **"Focus score wrong"** | Uncategorized time | Organize Timing projects |
+| **"Python errors"** | Environment issues | Use Docker! |
+| **"Can't find files"** | Path issues | Use absolute paths |
+
+### 🎯 Pro Tips
+- Always use Docker for Python scripts
+- Test Timing connection first
+- Check logs in `~/gtd-coach/logs/`
+- Weekly summaries show trends
+- Focus on progress, not perfection
+
+---
+
+**Remember**: Most issues are already handled automatically! The system is designed to keep working even when things go wrong. 🚀

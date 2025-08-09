@@ -1,124 +1,148 @@
-# Docker Deployment for GTD Coach
+# 🐳 Docker Deployment for GTD Coach
 
-## Overview
+> 🎯 **Quick Jump**: [Commands](#-quick-commands) | [Architecture](#-architecture) | [Troubleshooting](#-troubleshooting)
 
-This deployment uses Docker/OrbStack to avoid Python "externally managed environment" issues while maintaining full functionality of the GTD Coach with Langfuse integration.
+## 🌟 Overview
 
-## Architecture
+This deployment uses Docker/OrbStack to avoid Python "externally managed environment" issues while maintaining full functionality of the GTD Coach with Langfuse integration and **NEW: Timing app focus tracking**.
 
+## 🏗️ Architecture
+
+```mermaid
+graph TB
+    A[Docker Container] --> B[GTD Coach App]
+    B --> C[Python 3.11]
+    B --> D[Langfuse SDK]
+    B --> E[Timing Integration]
+    B --> F[Graphiti Memory]
+    
+    A -->|Host Network| G[LM Studio :1234]
+    A -->|Host Network| H[Langfuse :3000]
+    A -->|API Calls| I[Timing App API]
+    
+    A -->|Volume Mount| J[data/]
+    A -->|Volume Mount| K[logs/]
+    A -->|Volume Mount| L[summaries/]
+    
+    style A fill:#74c0fc
+    style G fill:#ffd43b
+    style I fill:#51cf66
 ```
-┌─────────────────────────────────────────┐
-│         Docker Container                 │
-│   ┌─────────────────────────────────┐   │
-│   │     GTD Coach Application       │   │
-│   │  - Python 3.11 (official image) │   │
-│   │  - All dependencies installed   │   │
-│   │  - Langfuse SDK with OpenAI    │   │
-│   └─────────────────────────────────┘   │
-│                    │                     │
-│         Host Networking Mode             │
-│                    │                     │
-└────────────────────┼─────────────────────┘
-                     │
-    ┌────────────────┴────────────────┐
-    │                                  │
-    ▼                                  ▼
-┌──────────────────┐        ┌──────────────────┐
-│   LM Studio       │        │    Langfuse      │
-│ localhost:1234    │        │ localhost:3000   │
-└──────────────────┘        └──────────────────┘
-```
 
-## Key Features
+## ✨ Key Features
 
-1. **Host Networking**: OrbStack's native support allows seamless access to localhost services
-2. **Volume Mounts**: Data persistence through mounted directories (data/, logs/, summaries/)
-3. **Live Code Updates**: Python files are mounted read-only for development
-4. **Audio Alert Handling**: Gracefully disabled in container (visual indicators still work)
+| Feature | Description | Benefit |
+|---------|-------------|----------|
+| **Host Networking** | OrbStack native support | Access localhost services |
+| **Volume Mounts** | Persistent data storage | Keep your reviews |
+| **Live Code Updates** | Read-only mounts | Quick iteration |
+| **Audio Alerts** | Gracefully disabled | Works everywhere |
+| **🆕 Timing Integration** | API access | Focus tracking |
+| **🆕 Graphiti Memory** | Pattern storage | Learn from history |
 
-## Usage
+## 🚀 Quick Commands
 
-### Basic Commands
+### Essential Commands
 
 ```bash
-# Run weekly review
+# Run weekly review with all features
 ./docker-run.sh
+
+# 🆕 Test Timing integration
+./docker-run.sh timing
+
+# 🆕 Analyze Timing project organization  
+./docker-run.sh analyze-timing
 
 # Test Langfuse integration
 ./docker-run.sh test
 
-# Generate weekly summary
+# Generate weekly summary with focus metrics
 ./docker-run.sh summary
 
-# Rebuild after dependency changes
+# Rebuild after adding dependencies
 ./docker-run.sh build
 
-# Open shell for debugging
+# Debug in container shell
 ./docker-run.sh shell
 ```
 
-### Docker Compose Commands
+### Advanced Docker Compose
 
 ```bash
-# Run specific service
+# Run specific services
 docker compose run --rm gtd-coach
 docker compose run --rm test-langfuse
 docker compose run --rm generate-summary
 
-# View logs
+# 🆕 Test full Timing + Graphiti integration
+docker compose run gtd-coach python3 test_timing_graphiti_integration.py
+
+# View real-time logs
 docker compose logs -f gtd-coach
 
-# Stop all services
+# Clean shutdown
 docker compose down
 ```
 
-## File Structure
+## 📁 File Structure
 
 ```
 gtd-coach/
-├── Dockerfile              # Multi-stage build for Python app
-├── docker-compose.yml      # Service definitions
-├── docker-run.sh          # Convenience wrapper script
-├── .dockerignore          # Excludes unnecessary files
-└── requirements.txt       # Python dependencies (including langfuse[openai])
+├── 🐳 Dockerfile           # Multi-stage Python build
+├── 🏭 docker-compose.yml   # Service orchestration
+├── 🚀 docker-run.sh        # Quick launcher
+├── 🚫 .dockerignore        # Exclude patterns
+├── 📚 requirements.txt     # Dependencies
+├── 🔒 .env                 # Timing API key (create from .env.example)
+└── 💾 data/                # Persisted reviews & patterns
 ```
 
-## Benefits
+## 💪 Benefits
 
-1. **No Python Environment Issues**: Uses official Python image
-2. **Consistent Dependencies**: Same environment every time
-3. **Easy Updates**: Just rebuild when requirements change
-4. **Development Friendly**: Mount local files for quick iteration
-5. **Production Ready**: Can be deployed anywhere Docker runs
+| Benefit | Description | ADHD Win |
+|---------|-------------|----------|
+| **No Python Hell** | Official image | Just works |
+| **Consistent Env** | Same every time | No surprises |
+| **Easy Updates** | One command | Stay current |
+| **Dev Friendly** | Live mounts | Quick fixes |
+| **Cloud Ready** | Deploy anywhere | Scale up |
 
-## Troubleshooting
+## 🆘 Troubleshooting
 
-### Container can't connect to LM Studio
-- Ensure LM Studio is running on host
-- Check it's listening on 0.0.0.0:1234, not just 127.0.0.1:1234
+### Common Issues & Quick Fixes
 
-### Permission issues with mounted volumes
-- Docker creates files as root by default
-- Use `sudo` if needed to clean up files
+| Problem | Solution |
+|---------|----------|
+| **Can't connect to LM Studio** | Check `lms server start` on host |
+| **Permission errors** | Use `sudo` for file cleanup |
+| **First run slow** | Normal - downloading images |
+| **No audio alerts** | Expected - visual indicators work |
+| **🆕 No Timing data** | Check `.env` has API key |
+| **🆕 Focus score missing** | Run `./docker-run.sh timing` to test |
 
-### Slow performance on first run
-- Docker needs to download base image and install dependencies
-- Subsequent runs use cached layers
+## 🔒 Security Notes
 
-### Audio alerts not working
-- This is expected - audio is disabled in containers
-- Visual progress indicators still function
+### Sensitive Data
+- ✅ Langfuse keys in `langfuse_tracker.py` (use `.example`)
+- ✅ Timing API key in `.env` (never commit)
+- ✅ `.gitignore` excludes all sensitive files
+- ✅ Use env vars for production deployments
 
-## Security Notes
+## 🎯 Next Steps
 
-- Langfuse keys are stored in `langfuse_tracker.py`
-- Consider using environment variables for production
-- The `.gitignore` excludes sensitive files
-- Always use `langfuse_tracker.py.example` as template
+### Quick Wins
+1. ✅ Add Timing API key to `.env`
+2. ✅ Run first review: `./docker-run.sh`
+3. ✅ Check focus score in wrap-up
+4. ✅ Generate summary: `./docker-run.sh summary`
 
-## Next Steps
+### Advanced
+1. 📊 Monitor in Langfuse UI (localhost:3000)
+2. 📈 Track focus score trends weekly
+3. ⏱️ Adjust phase timings if needed
+4. ☁️ Deploy to cloud with secrets manager
 
-1. Monitor performance in Langfuse UI
-2. Analyze weekly summaries for patterns
-3. Adjust phase timings based on data
-4. Consider deploying to cloud with proper secrets management
+---
+
+**Pro Tip**: Docker makes everything easier - no Python issues, consistent environment, one-command updates! 🐳🚀
