@@ -22,6 +22,7 @@ from adhd_patterns import ADHDPatternDetector
 
 # Import Timing integration
 from timing_integration import TimingAPI, get_mock_projects
+from timing_comparison import compare_time_with_priorities, generate_simple_time_summary, suggest_time_adjustments
 
 # Import Langfuse for LLM observability
 try:
@@ -71,6 +72,7 @@ class GTDCoach:
             "items_captured": 0,
             "phase_durations": {}
         }
+        self.priorities = []  # Store priorities for wrap-up phase
         
         # Initialize memory and pattern detection
         self.memory = GraphitiMemory(self.session_id)
@@ -684,6 +686,19 @@ Mind sweep phase is now complete. Please provide encouragement and prepare me fo
                 priorities.append({"action": action.strip(), "priority": priority})
         
         self.save_priorities(priorities)
+        self.priorities = priorities  # Store for wrap-up phase
+        
+        # Show time comparison if we have Timing data
+        if self.timing_projects:
+            time_summary = generate_simple_time_summary(self.timing_projects)
+            if time_summary:
+                print(time_summary)
+        
+        # Compare priorities with actual time spent
+        comparison = compare_time_with_priorities(priorities)
+        if comparison:
+            print(comparison)
+        
         self.end_phase("Prioritization", phase_start)
     
     def run_wrapup_phase(self):
@@ -707,6 +722,20 @@ Items captured: {self.review_data['items_captured']}"""
         
         # Save review log
         self.save_review_log()
+        
+        # Show time adjustment suggestion if we have data
+        if self.timing_projects and self.priorities:
+            timing_data = {
+                'total_hours': sum(p.get('time_spent', 0) for p in self.timing_projects),
+                'estimated_hours': {
+                    '3. Arabic Learning': sum(p.get('time_spent', 0) for p in self.timing_projects 
+                                            if 'arabic' in p.get('name', '').lower() or 
+                                            'duolingo' in p.get('name', '').lower())
+                }
+            }
+            suggestion = suggest_time_adjustments(timing_data, self.priorities)
+            if suggestion:
+                print(suggestion)
         
         self.end_phase("Wrap-up", phase_start)
         

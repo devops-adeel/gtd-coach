@@ -33,6 +33,7 @@ usage() {
     echo "  review       Run the GTD weekly review (default)"
     echo "  test         Test Langfuse integration"
     echo "  timing       Test Timing app integration"
+    echo "  analyze-timing Analyze your Timing data for GTD alignment"
     echo "  summary      Generate weekly summary"
     echo "  build        Build the Docker image"
     echo "  shell        Open a shell in the container"
@@ -123,6 +124,13 @@ case "$COMMAND" in
         echo "================================="
         echo ""
         docker compose run --rm gtd-coach python3 test_timing_integration.py
+        ;;
+    
+    analyze-timing)
+        echo -e "\n${GREEN}📊 Analyzing Timing Data for GTD Alignment${NC}"
+        echo "=========================================="
+        echo ""
+        docker compose run --rm gtd-coach python3 analyze_timing.py
         ;;
     
     shell)

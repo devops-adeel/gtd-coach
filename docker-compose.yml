@@ -20,6 +20,8 @@ services:
       - ./test_langfuse.py:/app/test_langfuse.py:ro
       - ./timing_integration.py:/app/timing_integration.py:ro
       - ./test_timing_integration.py:/app/test_timing_integration.py:ro
+      - ./analyze_timing.py:/app/analyze_timing.py:ro
+      - ./timing_comparison.py:/app/timing_comparison.py:ro
       # Mount prompts for easy editing
       - ./prompts:/app/prompts:ro
       # Mount .env file if it exists (for Timing API key)
