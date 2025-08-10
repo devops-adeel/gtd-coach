@@ -257,6 +257,45 @@ docker compose run gtd-coach python3 test_timing_graphiti_integration.py
 - `/report`: Aggregated project summaries for overview
 - Parameters optimized for 3-second timeout constraint
 
+## Memory Retrieval: Zero-Friction Pattern Recognition (NEW - Dec 2024)
+
+### Overview
+The system now includes lightweight memory retrieval that shows recurring patterns from previous sessions at startup, with zero cognitive load for ADHD users.
+
+### Implementation
+- **pattern_detector.py**: Analyzes mindsweep files to find recurring themes across sessions
+- **memory_enhancer.py**: Bridges pattern detection with Graphiti for enhanced memory
+- **Pre-computation**: Patterns are computed at session end and cached for instant display
+- **Zero-friction**: No user input required - patterns appear automatically at startup
+
+### How It Works
+1. **During Wrap-up**: System analyzes current and past mindsweep sessions
+2. **Pattern Detection**: Identifies items/themes that recur across 2+ weeks
+3. **Context Saving**: Stores patterns in `data/next_session_context.json`
+4. **At Next Startup**: Instantly displays "💭 On your mind lately:" with top patterns
+5. **No Delay**: Pre-computed data loads in <100ms
+
+### Pattern Detection Algorithm
+- Extracts meaningful bigrams (2-word phrases) from mindsweep items
+- Tracks single important words (4+ characters, excluding common words)
+- Requires patterns to appear in 2+ different sessions to be considered recurring
+- Returns top 3 patterns sorted by frequency
+
+### Benefits for ADHD Users
+- **Externalized Memory**: Acts as "cognitive prosthetic" for working memory deficits
+- **No Cognitive Load**: Patterns appear automatically without user action
+- **Non-judgmental**: Framed as "on your mind lately" not "overdue items"
+- **Quick Recognition**: Helps users quickly recall ongoing concerns
+
+### Testing
+```bash
+# Test pattern detection logic
+python3 test_pattern_detector.py
+
+# Test with realistic patterns
+python3 test_pattern_realistic.py
+```
+
 ## Graphiti Integration with Custom GTD Entities (FULLY IMPLEMENTED)
 
 ### Implementation Status (August 2025)

@@ -73,11 +73,16 @@ class GTDCoach:
             "phase_durations": {}
         }
         self.priorities = []  # Store priorities for wrap-up phase
+        self.mindsweep_items = []  # Store mindsweep items for pattern detection
         
         # Initialize memory and pattern detection
         self.memory = GraphitiMemory(self.session_id)
         self.pattern_detector = ADHDPatternDetector()
         self.current_phase = "STARTUP"
+        
+        # Initialize lightweight pattern detector for memory retrieval
+        from pattern_detector import PatternDetector
+        self.memory_patterns = PatternDetector()
         
         # Initialize Timing API
         self.timing_api = TimingAPI()
@@ -380,6 +385,14 @@ class GTDCoach:
             self.logger.warning(f"Failed to initialize Graphiti: {e}")
             # Continue anyway with JSON backup
         
+        # Load and display pre-computed context (instant, zero-friction)
+        context = self.memory_patterns.load_context()
+        if context and context.get('patterns'):
+            print("\n💭 On your mind lately:")
+            for pattern in context['patterns'][:3]:  # Show top 3 patterns
+                print(f"   • {pattern['pattern']} (seen {pattern['weeks_seen']} weeks)")
+            print()  # Add spacing
+        
         # Start fetching Timing data asynchronously if configured
         if self.timing_api.is_configured():
             self.logger.info("Starting async fetch of Timing project data")
@@ -594,6 +607,9 @@ Please help me quickly process and organize these items. Stay within the Mind Sw
         final_items = priority_items if len(items) > 15 else items
         coherence_analysis = self.pattern_detector.analyze_mindsweep_coherence(final_items)
         
+        # Store items for pattern detection in wrap-up
+        self.mindsweep_items = final_items
+        
         # Calculate capture phase metrics
         capture_duration = time.time() - capture_start
         phase_metrics = {
@@ -779,6 +795,31 @@ Items captured: {self.review_data['items_captured']}"""
             suggestion = suggest_time_adjustments(comparison, self.priorities)
             if suggestion:
                 print(suggestion)
+        
+        # Pre-compute patterns for next session (runs in background)
+        print("\n📋 Analyzing patterns for next session...")
+        try:
+            # Find recurring patterns from recent sessions
+            patterns = self.memory_patterns.find_recurring_patterns(weeks_back=4)
+            
+            # Generate insights from current session
+            insights = self.memory_patterns.get_simple_insights(self.mindsweep_items)
+            
+            # Save context for next session
+            next_context = {
+                'patterns': patterns,
+                'last_session': self.session_id,
+                'last_insights': insights,
+                'timestamp': datetime.now().isoformat()
+            }
+            self.memory_patterns.save_context(next_context)
+            
+            if patterns:
+                self.logger.info(f"Found {len(patterns)} recurring patterns for next session")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to pre-compute patterns: {e}")
+            # Not critical - continue without patterns
         
         self.end_phase("Wrap-up", phase_start)
         
