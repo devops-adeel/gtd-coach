@@ -15,7 +15,12 @@ test_output.log
 # Environment and configuration
 .env
 .env.local
+.env.graphiti
 langfuse_tracker.py
 
 # Docker
 .dockerenv
+
+# Cache and temporary files
+llm_cache/
+data/.migration_state.json

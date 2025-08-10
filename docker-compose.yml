@@ -15,17 +15,21 @@ services:
       - ./gtd-review.py:/app/gtd-review.py:ro
       - ./langfuse_tracker.py:/app/langfuse_tracker.py:ro
       - ./graphiti_integration.py:/app/graphiti_integration.py:ro
+      - ./graphiti_client.py:/app/graphiti_client.py:ro
       - ./adhd_patterns.py:/app/adhd_patterns.py:ro
       - ./generate_summary.py:/app/generate_summary.py:ro
       - ./test_langfuse.py:/app/test_langfuse.py:ro
+      - ./test_graphiti_connection.py:/app/test_graphiti_connection.py:ro
+      - ./migrate_to_graphiti.py:/app/migrate_to_graphiti.py:ro
       - ./timing_integration.py:/app/timing_integration.py:ro
       - ./test_timing_integration.py:/app/test_timing_integration.py:ro
       - ./analyze_timing.py:/app/analyze_timing.py:ro
       - ./timing_comparison.py:/app/timing_comparison.py:ro
       # Mount prompts for easy editing
       - ./prompts:/app/prompts:ro
-      # Mount .env file if it exists (for Timing API key)
+      # Mount .env files (Timing API and Graphiti config)
       - ./.env:/app/.env:ro
+      - ./.env.graphiti:/app/.env.graphiti:ro
     environment:
       # Pass through terminal for interactive sessions
       - TERM=xterm-256color
@@ -33,6 +37,8 @@ services:
       - IN_DOCKER=true
       # Python unbuffered output
       - PYTHONUNBUFFERED=1
+      # Graphiti integration
+      - GRAPHITI_ENABLED=true
     # Keep stdin open and allocate pseudo-TTY for interactive mode
     stdin_open: true
     tty: true

@@ -372,6 +372,14 @@ class GTDCoach:
         phase_start = self.phase_timer("Startup", 2)
         self.review_start_time = datetime.now()
         
+        # Initialize Graphiti memory connection
+        self.logger.info("Initializing Graphiti memory...")
+        try:
+            self.loop.run_until_complete(self.memory.initialize())
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize Graphiti: {e}")
+            # Continue anyway with JSON backup
+        
         # Start fetching Timing data asynchronously if configured
         if self.timing_api.is_configured():
             self.logger.info("Starting async fetch of Timing project data")
