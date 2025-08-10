@@ -1,9 +1,47 @@
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# Testing
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.pytest_cache/
+*.cover
+.hypothesis/
+test-results-*.xml
+test_report.json
 
 # User data - should not be committed
 data/mindsweep_*.json
 data/priorities_*.json
 data/graphiti_batch_*.json
+data/next_session_context.json
 logs/review_*.json
 logs/session_*.log
 summaries/weekly_summary_*.md
@@ -15,6 +53,7 @@ test_output.log
 # Environment and configuration
 .env
 .env.local
+.env.test
 .env.graphiti
 langfuse_tracker.py
 
@@ -24,3 +63,14 @@ langfuse_tracker.py
 # Cache and temporary files
 llm_cache/
 data/.migration_state.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation builds
+docs/_build/

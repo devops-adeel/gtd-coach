@@ -1,13 +1,15 @@
 # GTD Coach Dependencies
+# Updated: August 10, 2025 - All packages at latest stable versions
 
 # Core dependencies
-requests  # For LM Studio API calls
-asyncio   # Built-in, for async operations
-python-dotenv  # For loading environment variables from .env file
+requests==2.32.4  # For LM Studio API calls (released June 2025, latest as of Aug 2025)
+python-dotenv==1.1.1  # For loading environment variables from .env file (latest)
 
 # Graphiti Integration
-graphiti-core[openai]==0.18.5  # Knowledge graph memory with OpenAI support (upgraded for custom entity types)
-neo4j==5.26.0  # Neo4j driver for Python
+graphiti-core[openai]==0.18.5  # Knowledge graph memory with OpenAI support (latest stable)
+neo4j==5.28.2  # Neo4j driver for Python (released July 30, 2025, latest)
 
-# Optional integrations
-langfuse[openai]>=2.0.0  # LLM observability with OpenAI integration (optional)
+# LLM Observability
+langfuse[openai]==3.2.3  # LLM observability with OpenAI integration (latest as of Aug 2025)
+
+# Note: asyncio is a built-in Python module and doesn't need to be installed
