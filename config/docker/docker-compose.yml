@@ -1,0 +1,70 @@
+services:
+  gtd-coach:
+    build: 
+      context: ../..
+      dockerfile: config/docker/Dockerfile
+    image: gtd-coach:latest
+    container_name: gtd-coach
+    # Use host networking to access LM Studio and Langfuse on localhost
+    network_mode: host
+    # Mount volumes for data persistence
+    volumes:
+      # Mount data directory for persistence
+      - ../../data:/app/data
+      - ../../logs:/app/logs
+      - ../../summaries:/app/summaries
+      # Mount the entire package for development
+      - ../../gtd_coach:/app/gtd_coach:ro
+      # Mount scripts
+      - ../../scripts:/app/scripts:ro
+      # Mount config files
+      - ../../config:/app/config:ro
+      # Mount .env files
+      - ../../.env:/app/.env:ro
+      - ../../.env.graphiti:/app/.env.graphiti:ro
+    environment:
+      # Pass through terminal for interactive sessions
+      - TERM=xterm-256color
+      # Indicate we're in Docker (for disabling audio if needed)
+      - IN_DOCKER=true
+      # Python unbuffered output
+      - PYTHONUNBUFFERED=1
+      # Graphiti integration
+      - GRAPHITI_ENABLED=true
+    # Keep stdin open and allocate pseudo-TTY for interactive mode
+    stdin_open: true
+    tty: true
+    # Default command
+    command: python3 -m gtd_coach
+
+  # Utility service for running tests
+  test-langfuse:
+    build: 
+      context: ../..
+      dockerfile: config/docker/Dockerfile
+    image: gtd-coach:latest
+    container_name: gtd-coach-test
+    network_mode: host
+    volumes:
+      - ../../gtd_coach:/app/gtd_coach:ro
+      - ../../tests:/app/tests:ro
+    command: python3 -m pytest tests/test_integrations.py::test_langfuse
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # Utility service for generating summaries
+  generate-summary:
+    build: 
+      context: ../..
+      dockerfile: config/docker/Dockerfile
+    image: gtd-coach:latest
+    container_name: gtd-coach-summary
+    network_mode: host
+    volumes:
+      - ../../data:/app/data:ro
+      - ../../summaries:/app/summaries
+      - ../../scripts:/app/scripts:ro
+      - ../../gtd_coach:/app/gtd_coach:ro
+    command: python3 scripts/generate_summary.py
+    environment:
+      - PYTHONUNBUFFERED=1
