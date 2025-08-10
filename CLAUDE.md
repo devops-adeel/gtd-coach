@@ -34,6 +34,9 @@ docker compose run gtd-coach python3 test_timing_graphiti_integration.py
 # Test Langfuse integration
 ./docker-run.sh test
 
+# Test prompt-to-trace linking (NEW)
+./docker-run.sh test-trace-linking
+
 # Generate weekly summary (NOW WITH TIMING INSIGHTS)
 ./docker-run.sh summary
 
@@ -177,13 +180,40 @@ Episodes follow this structure:
   - Binary success/failure
   - Phase-specific latency thresholds
   - Response appropriateness (for manual review)
+- **Prompt Versions**: Which prompt variant was used (firm/gentle)
+- **A/B Test Results**: Performance metrics by coaching tone
 
 ### Implementation Approach
-The integration uses Langfuse's drop-in OpenAI replacement:
-1. Wraps LM Studio API calls with automatic tracing
-2. Falls back gracefully if Langfuse is unavailable
-3. Adds minimal overhead with background batching
-4. Preserves all existing retry and error handling logic
+The integration uses Langfuse's OpenAI SDK wrapper for automatic trace linking:
+1. **OpenAI Client**: Uses `from langfuse.openai import OpenAI` with LM Studio endpoint
+2. **Prompt Linking**: Passes `langfuse_prompt` parameter to link prompts to traces
+3. **Metadata Enrichment**: Includes session ID, user ID, tags, and custom metrics
+4. **Graceful Degradation**: Falls back to standard OpenAI SDK or HTTP requests
+5. **Phase Metrics**: Captures items captured, priorities set, focus scores
+
+#### Key Implementation
+```python
+# Initialize with Langfuse wrapper
+from langfuse.openai import OpenAI
+client = OpenAI(
+    base_url="http://localhost:1234/v1",
+    api_key="lm-studio"
+)
+
+# Make LLM call with trace linking
+completion = client.chat.completions.create(
+    model="meta-llama-3.1-8b-instruct",
+    messages=messages,
+    langfuse_prompt=prompt,  # Links prompt to trace
+    metadata={
+        "langfuse_session_id": session_id,
+        "langfuse_user_id": user_id,
+        "langfuse_tags": ["variant:firm", "gtd-review"],
+        # Custom metadata
+        "phase_metrics": {...}
+    }
+)
+```
 
 ### Configuration
 Configure Langfuse by copying the example file and adding your keys:
@@ -194,6 +224,97 @@ cp langfuse_tracker.py.example langfuse_tracker.py
 # - LANGFUSE_PUBLIC_KEY = "pk-lf-..."  # Your public key
 # - LANGFUSE_SECRET_KEY = "sk-lf-..."  # Your secret key
 ```
+
+## Prompt Management System with Trace Linking (ENHANCED - December 2025)
+
+### Overview
+The GTD Coach now uses Langfuse's prompt management system with automatic trace linking for centralized prompt versioning, A/B testing, and dynamic variable substitution. The system tracks which prompt versions are used in each trace, enabling performance analysis and optimization. All LLM calls are automatically linked to their prompt versions via the Langfuse OpenAI SDK wrapper.
+
+### Setup
+1. **Upload prompts to Langfuse**:
+   ```bash
+   python3 upload_prompts_to_langfuse.py
+   ```
+   This creates:
+   - `gtd-coach-system` with "firm" and "gentle" variants
+   - `gtd-coach-fallback` for timeout prevention
+   - Model configuration including `meta-llama-3.1-8b-instruct`
+
+2. **Environment Variables**:
+   ```bash
+   export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+   export LANGFUSE_SECRET_KEY="sk-lf-..."
+   export LANGFUSE_HOST="https://cloud.langfuse.com"  # Optional
+   ```
+
+### Prompt Variables
+Dynamic variables compiled at runtime:
+- `{{total_time}}`: Total review time (30 minutes)
+- `{{phase_name}}`: Current phase (STARTUP, MIND_SWEEP, etc.)
+- `{{phase_time_limit}}`: Time allocated for current phase
+- `{{time_remaining}}`: Minutes left in current phase
+- `{{time_elapsed}}`: Minutes elapsed in review
+- `{{phase_instructions}}`: Phase-specific guidance
+
+### A/B Testing
+The system randomly selects between two coaching tones per session:
+- **Firm tone**: Direct, time-focused, structured
+- **Gentle tone**: Supportive, flexible, encouraging
+
+Selection is tracked in Langfuse metadata for performance analysis.
+
+### Model Configuration
+Each prompt stores model configuration in its config field:
+```json
+{
+  "model": "meta-llama-3.1-8b-instruct",
+  "temperature": 0.7,
+  "max_tokens": 500,
+  "timeout": 10,
+  "phase_times": {
+    "STARTUP": 2,
+    "MIND_SWEEP": 10,
+    "PROJECT_REVIEW": 12,
+    "PRIORITIZATION": 5,
+    "WRAP_UP": 3
+  }
+}
+```
+
+### Testing
+Run the test suite to verify prompt management and trace linking:
+```bash
+# Unit tests including trace linking
+python3 test_prompt_management.py
+
+# E2E tests in Docker
+./docker-run.sh test-trace-linking
+
+# Analyze prompt performance
+python3 analyze_prompt_performance.py
+```
+Tests include:
+- Prompt fetching from Langfuse
+- Variable compilation
+- Model configuration verification
+- A/B testing logic
+- Fallback behavior
+- Caching performance
+- **Trace linking verification (NEW)**
+- **Metadata enrichment validation (NEW)**
+- **Performance metrics capture (NEW)**
+- **A/B variant comparison (NEW)**
+
+### Benefits
+- **Version Control**: Track and rollback prompt changes
+- **No Deploy Updates**: Change prompts without redeploying
+- **Performance Tracking**: Compare effectiveness of different tones with detailed metrics
+- **Centralized Management**: All prompts in one place
+- **Automatic Caching**: 5-minute cache for low latency
+- **Trace Linking**: Automatic association of prompts with traces for analysis
+- **Rich Metadata**: Phase metrics, Graphiti IDs, Timing scores in traces
+- **A/B Analysis**: Built-in performance comparison with `analyze_prompt_performance.py`
+- **Graceful Degradation**: System continues working without Langfuse
 
 ## Timing App Integration ✅ ENHANCED WITH FOCUS TRACKING
 

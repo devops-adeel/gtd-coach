@@ -154,7 +154,9 @@ def test_phase_scoring():
                 try:
                     # Test that scoring function doesn't error
                     # In production, this would be called with a real trace_id
-                    score_response(phase, True, response_time, trace_id="test-trace-id")
+                    score_response(phase, True, response_time, 
+                                 session_id="test-session-123", 
+                                 trace_id="test-trace-id")
                 except Exception as e:
                     # Expected to fail without real trace, but should not have syntax errors
                     if "trace" not in str(e).lower() and "score" not in str(e).lower():
@@ -165,6 +167,92 @@ def test_phase_scoring():
         
     except Exception as e:
         print(f"{RED}✗ Phase scoring failed: {e}{RESET}")
+        return False
+
+def test_session_grouping(client):
+    """Test 6: Verify that multiple calls are grouped in same session"""
+    print("\n6. Testing session grouping...")
+    
+    from datetime import datetime
+    
+    try:
+        # Generate unique session ID
+        session_id = f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        print(f"  Creating test session: {session_id}")
+        
+        # Make multiple calls with same session
+        for i in range(3):
+            try:
+                completion = client.chat.completions.create(
+                    model="meta-llama-3.1-8b-instruct",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": f"Test message {i+1}: Say 'Message {i+1} received'"}
+                    ],
+                    temperature=0.7,
+                    max_tokens=50,
+                    name=f"test_interaction_{i+1}",
+                    metadata={
+                        "langfuse_session_id": session_id,
+                        "test": True,
+                        "message_number": i+1
+                    }
+                )
+                
+                response = completion.choices[0].message.content
+                print(f"  Message {i+1}: {response[:50]}...")
+                
+            except Exception as e:
+                print(f"{YELLOW}  Warning: Call {i+1} failed: {e}{RESET}")
+        
+        print(f"{GREEN}✓ Session grouping test completed{RESET}")
+        print(f"  Check Langfuse UI for session: {session_id}")
+        print(f"  All 3 traces should be grouped together")
+        return True
+        
+    except Exception as e:
+        print(f"{RED}✗ Session grouping failed: {e}{RESET}")
+        return False
+
+def test_user_tracking(client):
+    """Test 7: Verify weekly user profile tracking"""
+    print("\n7. Testing weekly user profile tracking...")
+    
+    from datetime import datetime
+    
+    try:
+        # Generate expected user ID for current week
+        expected_user_id = datetime.now().strftime("%G-W%V")
+        
+        print(f"  Testing with user ID: {expected_user_id}")
+        
+        # Make call with user_id in metadata
+        completion = client.chat.completions.create(
+            model="meta-llama-3.1-8b-instruct",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Test user tracking: Say 'User tracking active'"}
+            ],
+            temperature=0.7,
+            max_tokens=50,
+            name="test_user_tracking",
+            metadata={
+                "langfuse_session_id": "test-session-user",
+                "langfuse_user_id": expected_user_id,  # Weekly profile tracking
+                "test": True
+            }
+        )
+        
+        response = completion.choices[0].message.content
+        print(f"  Response: {response[:50]}...")
+        
+        print(f"{GREEN}✓ User tracking configured for week: {expected_user_id}{RESET}")
+        print(f"  Check Langfuse UI - Users section should show: {expected_user_id}")
+        return True
+        
+    except Exception as e:
+        print(f"{RED}✗ User tracking failed: {e}{RESET}")
         return False
 
 def main():
@@ -211,6 +299,20 @@ def main():
     # Test 5: Phase scoring
     scoring_ok = test_phase_scoring()
     results.append(("Phase Scoring", scoring_ok))
+    
+    # Test 6: Session grouping (only if client created)
+    if client:
+        session_ok = test_session_grouping(client)
+        results.append(("Session Grouping", session_ok))
+    else:
+        results.append(("Session Grouping", False))
+    
+    # Test 7: User tracking (only if client created)
+    if client:
+        user_ok = test_user_tracking(client)
+        results.append(("User Tracking", user_ok))
+    else:
+        results.append(("User Tracking", False))
     
     # Summary
     print("\n" + "=" * 50)

@@ -1,0 +1,71 @@
+{
+  "analysis_date": "2025-08-10T17:14:06.568488",
+  "period": {
+    "start": "2025-08-03T17:14:06.561806",
+    "end": "2025-08-10T17:14:06.561806"
+  },
+  "statistics": {
+    "firm": {
+      "avg_latency": 1.15,
+      "median_latency": 1.15,
+      "p95_latency": 1.2,
+      "success_rate": 1.0,
+      "avg_completion": 1.0,
+      "avg_items_captured": 9,
+      "sample_size": 2
+    },
+    "gentle": {
+      "avg_latency": 1.45,
+      "median_latency": 1.45,
+      "p95_latency": 1.5,
+      "success_rate": 1.0,
+      "avg_completion": 0.8,
+      "avg_items_captured": 6.5,
+      "sample_size": 2
+    }
+  },
+  "winners": {
+    "latency": "firm",
+    "success": "gentle",
+    "completion": "firm",
+    "productivity": "firm"
+  },
+  "raw_metrics": {
+    "firm": {
+      "latency": [
+        1.2,
+        1.1
+      ],
+      "success": [
+        true,
+        true
+      ],
+      "completion_rate": [
+        1.0,
+        1.0
+      ],
+      "phase_mind_sweep_items": [
+        8,
+        10
+      ]
+    },
+    "gentle": {
+      "latency": [
+        1.4,
+        1.5
+      ],
+      "success": [
+        true,
+        true
+      ],
+      "completion_rate": [
+        0.6,
+        1.0
+      ],
+      "phase_mind_sweep_items": [
+        6,
+        7
+      ]
+    }
+  }
+}

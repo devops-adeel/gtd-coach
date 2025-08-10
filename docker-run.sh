@@ -32,6 +32,7 @@ usage() {
     echo "Commands:"
     echo "  review       Run the GTD weekly review (default)"
     echo "  test         Test Langfuse integration"
+    echo "  test-trace-linking  Test prompt-to-trace linking (E2E)"
     echo "  timing       Test Timing app integration"
     echo "  analyze-timing Analyze your Timing data for GTD alignment"
     echo "  summary      Generate weekly summary"
@@ -124,6 +125,13 @@ case "$COMMAND" in
         echo "================================="
         echo ""
         docker compose run --rm gtd-coach python3 test_timing_integration.py
+        ;;
+    
+    test-trace-linking)
+        echo -e "\n${GREEN}🔗 Testing Prompt-to-Trace Linking (E2E)${NC}"
+        echo "======================================="
+        echo ""
+        docker compose run --rm gtd-coach python3 test_e2e_trace_linking.py
         ;;
     
     analyze-timing)

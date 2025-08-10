@@ -12,6 +12,7 @@ import sys
 import os
 import logging
 import asyncio
+import random
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -19,6 +20,26 @@ from dotenv import load_dotenv
 # Import memory integration modules
 from graphiti_integration import GraphitiMemory
 from adhd_patterns import ADHDPatternDetector
+
+# Import Langfuse for prompt management and OpenAI SDK wrapper
+try:
+    from langfuse import Langfuse
+    LANGFUSE_PROMPTS_AVAILABLE = True
+except ImportError:
+    LANGFUSE_PROMPTS_AVAILABLE = False
+
+# Import Langfuse OpenAI SDK wrapper for trace linking
+try:
+    from langfuse.openai import OpenAI as LangfuseOpenAI
+    LANGFUSE_OPENAI_AVAILABLE = True
+except ImportError:
+    LANGFUSE_OPENAI_AVAILABLE = False
+    # Fall back to standard OpenAI SDK if available
+    try:
+        from openai import OpenAI as StandardOpenAI
+        STANDARD_OPENAI_AVAILABLE = True
+    except ImportError:
+        STANDARD_OPENAI_AVAILABLE = False
 
 # Import Timing integration
 from timing_integration import TimingAPI, get_mock_projects
@@ -60,6 +81,9 @@ class GTDCoach:
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.setup_logging()
         
+        # Generate weekly user profile (ISO 8601 week format)
+        self.user_id = datetime.now().strftime("%G-W%V")  # e.g., "2025-W32"
+        
         # Create event loop for async tasks
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
@@ -92,6 +116,16 @@ class GTDCoach:
         # Initialize Langfuse client if available
         self.langfuse_enabled = False
         self.langfuse_client = None
+        self.langfuse_prompts = None  # For prompt management
+        self.prompt_tone = None  # For A/B testing tracking
+        self.openai_client = None  # OpenAI client for LLM calls
+        self.current_graphiti_batch_id = None  # Track current Graphiti batch
+        self.phase_metrics = {}  # Store phase-specific metrics for trace enrichment
+        
+        # Initialize OpenAI client with Langfuse wrapper or standard SDK
+        self.initialize_openai_client()
+        
+        # Try to initialize Langfuse for observability
         if LANGFUSE_AVAILABLE and validate_configuration():
             try:
                 self.langfuse_client = get_langfuse_client()
@@ -100,6 +134,18 @@ class GTDCoach:
             except Exception as e:
                 self.logger.warning(f"Langfuse initialization failed: {e}")
                 self.langfuse_enabled = False
+        
+        # Try to initialize Langfuse for prompt management (separate from observability)
+        if LANGFUSE_PROMPTS_AVAILABLE:
+            try:
+                self.langfuse_prompts = Langfuse()
+                self.logger.info("Langfuse prompt management enabled")
+                # A/B test: randomly select coaching tone
+                self.prompt_tone = random.choice(["firm", "gentle"])
+                self.logger.info(f"Selected coaching tone: {self.prompt_tone}")
+            except Exception as e:
+                self.logger.warning(f"Langfuse prompt management initialization failed: {e}")
+                self.langfuse_prompts = None
         
         # Phase-specific settings for optimal LLM performance
         self.phase_settings = {
@@ -126,6 +172,31 @@ class GTDCoach:
         }
         
         self.load_system_prompt()
+    
+    def initialize_openai_client(self):
+        """Initialize OpenAI client with Langfuse wrapper or standard SDK"""
+        try:
+            if LANGFUSE_OPENAI_AVAILABLE:
+                # Use Langfuse OpenAI wrapper for automatic trace linking
+                self.openai_client = LangfuseOpenAI(
+                    base_url="http://localhost:1234/v1",  # LM Studio endpoint
+                    api_key="lm-studio"  # Required but unused by LM Studio
+                )
+                self.logger.info("Initialized Langfuse OpenAI SDK wrapper for trace linking")
+            elif STANDARD_OPENAI_AVAILABLE:
+                # Fall back to standard OpenAI SDK
+                self.openai_client = StandardOpenAI(
+                    base_url="http://localhost:1234/v1",
+                    api_key="lm-studio"
+                )
+                self.logger.info("Initialized standard OpenAI SDK (no automatic trace linking)")
+            else:
+                # No OpenAI SDK available, will use requests
+                self.openai_client = None
+                self.logger.info("No OpenAI SDK available, will use HTTP requests")
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize OpenAI client: {e}")
+            self.openai_client = None
     
     def setup_logging(self):
         """Configure logging for this session"""
@@ -155,27 +226,180 @@ class GTDCoach:
         self.logger.info(f"GTD Coach session started - ID: {self.session_id}")
         
     def load_system_prompt(self):
-        """Load the system prompt from file"""
-        # Try simple prompt first, fall back to full prompt
-        simple_prompt_file = PROMPTS_DIR / "system-prompt-simple.txt"
-        full_prompt_file = PROMPTS_DIR / "system-prompt.txt"
+        """Load the system prompt from Langfuse or fall back to file"""
+        prompt_loaded = False
+        
+        # Try to load from Langfuse first
+        if self.langfuse_prompts:
+            try:
+                # Fetch the main prompt with selected tone
+                self.system_prompt = self.langfuse_prompts.get_prompt(
+                    "gtd-coach-system",
+                    label=self.prompt_tone,
+                    cache_ttl_seconds=300  # Cache for 5 minutes
+                )
+                
+                # Also fetch fallback prompt
+                self.fallback_prompt = self.langfuse_prompts.get_prompt(
+                    "gtd-coach-fallback",
+                    label="production",
+                    cache_ttl_seconds=300
+                )
+                
+                # Store model configuration from prompt
+                self.model_config = self.system_prompt.config
+                self.model_name = self.model_config.get("model", MODEL_NAME)
+                
+                # Initialize with compiled prompt for startup phase
+                initial_prompt = self.compile_prompt("STARTUP", time_remaining=30)
+                self.messages.append({"role": "system", "content": initial_prompt})
+                
+                prompt_loaded = True
+                self.logger.info(f"Loaded system prompt from Langfuse (tone: {self.prompt_tone})")
+                self.logger.info(f"Using model: {self.model_name} from prompt config")
+                
+            except Exception as e:
+                self.logger.warning(f"Failed to load prompts from Langfuse: {e}")
+                self.langfuse_prompts = None
+        
+        # Fall back to local files if Langfuse not available
+        if not prompt_loaded:
+            # Try simple prompt first, fall back to full prompt
+            simple_prompt_file = PROMPTS_DIR / "system-prompt-simple.txt"
+            full_prompt_file = PROMPTS_DIR / "system-prompt.txt"
+            
+            try:
+                # Use simple prompt to avoid timeout issues
+                if simple_prompt_file.exists():
+                    with open(simple_prompt_file, 'r') as f:
+                        system_prompt = f.read()
+                    self.logger.info("Loaded simple system prompt from file")
+                else:
+                    with open(full_prompt_file, 'r') as f:
+                        system_prompt = f.read()
+                    self.logger.info("Loaded full system prompt from file")
+                self.messages.append({"role": "system", "content": system_prompt})
+                self.logger.info(f"System prompt loaded from file, length: {len(system_prompt)} chars")
+                self.model_name = MODEL_NAME  # Use default model
+            except FileNotFoundError as e:
+                self.logger.error(f"System prompt not found: {e}")
+                print(f"Error: System prompt not found")
+                sys.exit(1)
+    
+    def compile_prompt(self, phase_name, time_remaining=None, time_elapsed=0):
+        """Compile prompt with dynamic variables"""
+        if not self.langfuse_prompts or not hasattr(self, 'system_prompt'):
+            return None
         
         try:
-            # Use simple prompt to avoid timeout issues
-            if simple_prompt_file.exists():
-                with open(simple_prompt_file, 'r') as f:
-                    system_prompt = f.read()
-                self.logger.info("Loaded simple system prompt")
-            else:
-                with open(full_prompt_file, 'r') as f:
-                    system_prompt = f.read()
-                self.logger.info("Loaded full system prompt")
-            self.messages.append({"role": "system", "content": system_prompt})
-            self.logger.info(f"System prompt loaded, length: {len(system_prompt)} chars")
-        except FileNotFoundError as e:
-            self.logger.error(f"System prompt not found: {e}")
-            print(f"Error: System prompt not found")
-            sys.exit(1)
+            # Get phase instructions from config
+            phase_instructions = self.model_config.get("phase_instructions", {}).get(
+                phase_name,
+                "Guide the user through this phase of the GTD review."
+            )
+            
+            # Get phase time limit from config
+            phase_times = self.model_config.get("phase_times", {})
+            phase_time_limit = phase_times.get(phase_name, 5)
+            
+            # Calculate time remaining if not provided
+            if time_remaining is None:
+                time_remaining = phase_time_limit - time_elapsed
+            
+            # Compile the prompt with variables
+            compiled = self.system_prompt.compile(
+                total_time=30,
+                phase_name=phase_name,
+                phase_time_limit=phase_time_limit,
+                time_remaining=max(0, time_remaining),
+                time_elapsed=time_elapsed,
+                phase_instructions=phase_instructions
+            )
+            
+            # Return the content of the compiled message
+            if isinstance(compiled, list) and len(compiled) > 0:
+                return compiled[0].get("content", "")
+            return compiled
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to compile prompt: {e}")
+            return None
+    
+    def get_time_remaining(self, phase_name):
+        """Calculate time remaining for current phase"""
+        if not hasattr(self, 'phase_start_times'):
+            self.phase_start_times = {}
+        
+        # Get phase time limit from config or defaults
+        if self.langfuse_prompts and hasattr(self, 'model_config'):
+            phase_times = self.model_config.get("phase_times", {})
+        else:
+            phase_times = {
+                "STARTUP": 2,
+                "MIND_SWEEP": 10,
+                "PROJECT_REVIEW": 12,
+                "PRIORITIZATION": 5,
+                "WRAP_UP": 3
+            }
+        
+        phase_limit = phase_times.get(phase_name.upper(), 5)
+        
+        # Calculate time elapsed
+        if phase_name in self.phase_start_times:
+            elapsed = (time.time() - self.phase_start_times[phase_name]) / 60  # Convert to minutes
+            return max(0, phase_limit - elapsed)
+        
+        return phase_limit
+    
+    def get_time_elapsed(self):
+        """Calculate total time elapsed in review"""
+        if hasattr(self, 'review_start_time') and self.review_start_time:
+            return (time.time() - self.review_start_time.timestamp()) / 60  # Convert to minutes
+        return 0
+    
+    def update_phase_metrics(self, phase_name, metrics):
+        """Update phase-specific metrics that will be included in trace metadata"""
+        if phase_name not in self.phase_metrics:
+            self.phase_metrics[phase_name] = {}
+        self.phase_metrics[phase_name].update(metrics)
+        self.logger.info(f"Updated metrics for {phase_name}: {metrics}")
+    
+    def complete_phase(self, phase_name):
+        """Update trace metadata with phase completion metrics"""
+        metrics = {}
+        
+        if phase_name == "MIND_SWEEP":
+            metrics = {
+                "items_captured": len(self.mindsweep_items) if hasattr(self, 'mindsweep_items') else 0,
+                "capture_duration": self.review_data.get("phase_durations", {}).get(phase_name, 0)
+            }
+        elif phase_name == "PROJECT_REVIEW":
+            metrics = {
+                "projects_reviewed": self.review_data.get("projects_reviewed", 0),
+                "decisions_made": self.review_data.get("decisions_made", 0)
+            }
+        elif phase_name == "PRIORITIZATION":
+            if hasattr(self, 'priorities'):
+                metrics = {
+                    "a_priorities": len([p for p in self.priorities if p.get("priority") == "A"]),
+                    "b_priorities": len([p for p in self.priorities if p.get("priority") == "B"]),
+                    "c_priorities": len([p for p in self.priorities if p.get("priority") == "C"]),
+                    "total_priorities": len(self.priorities)
+                }
+        elif phase_name == "WRAP_UP" and hasattr(self, 'timing_projects') and self.timing_projects:
+            # Add Timing focus metrics if available
+            try:
+                from timing_integration import calculate_focus_score, detect_context_switches
+                focus_data = {
+                    "focus_score": calculate_focus_score(self.timing_projects),
+                    "context_switches": detect_context_switches(self.timing_projects)
+                }
+                metrics.update(focus_data)
+            except Exception as e:
+                self.logger.warning(f"Could not calculate Timing metrics: {e}")
+        
+        if metrics:
+            self.update_phase_metrics(phase_name, metrics)
     
     def start_timer(self, minutes, message="Time's up!"):
         """Start a background timer"""
@@ -186,6 +410,22 @@ class GTDCoach:
     def send_message(self, content, save_to_history=True, phase_name=None):
         """Send a message to the LLM and get response with enhanced retry logic"""
         self.logger.info(f"Sending message to LLM - Phase: {phase_name or 'None'}, Content length: {len(content)} chars")
+        
+        # Set session context for this trace if Langfuse is enabled
+        if self.langfuse_enabled and LANGFUSE_AVAILABLE:
+            try:
+                from langfuse import get_client
+                langfuse = get_client()
+                langfuse.update_current_trace(
+                    session_id=self.session_id,
+                    name=f"gtd_review_{phase_name or 'general'}",
+                    metadata={
+                        "phase": self.current_phase,
+                        "review_session": self.session_id
+                    }
+                )
+            except Exception as e:
+                self.logger.debug(f"Failed to update trace context: {e}")
         
         # Track message timing for pattern detection
         message_start_time = time.time()
@@ -201,14 +441,31 @@ class GTDCoach:
                 )
             )
         
-        # Get phase-specific settings or use defaults
+        # Get phase-specific settings from prompt config or use defaults
         temperature = 0.8  # Better for conversational coaching
         max_tokens = 500   # Prevent overly long responses
         
-        if phase_name and hasattr(self, 'phase_settings') and phase_name in self.phase_settings:
+        # Try to use settings from Langfuse prompt config first
+        if self.langfuse_prompts and hasattr(self, 'model_config'):
+            temperature = self.model_config.get('temperature', temperature)
+            max_tokens = self.model_config.get('max_tokens', max_tokens)
+        # Fall back to phase-specific settings
+        elif phase_name and hasattr(self, 'phase_settings') and phase_name in self.phase_settings:
             settings = self.phase_settings[phase_name]
             temperature = settings.get('temperature', temperature)
             max_tokens = settings.get('max_tokens', max_tokens)
+        
+        # Update system prompt for current phase if using Langfuse
+        if self.langfuse_prompts and phase_name:
+            compiled_prompt = self.compile_prompt(
+                phase_name,
+                time_remaining=self.get_time_remaining(phase_name),
+                time_elapsed=self.get_time_elapsed()
+            )
+            if compiled_prompt:
+                # Update the system message with the compiled prompt
+                if self.messages and self.messages[0].get('role') == 'system':
+                    self.messages[0]['content'] = compiled_prompt
         
         max_retries = 3
         for attempt in range(max_retries):
@@ -216,27 +473,61 @@ class GTDCoach:
                 # Use current messages for this attempt
                 current_messages = self.messages.copy()
                 
-                # Use Langfuse client if available, otherwise fall back to direct API
-                if self.langfuse_enabled and self.langfuse_client:
+                # Try to use OpenAI client (with or without Langfuse wrapper)
+                if self.openai_client:
                     try:
-                        completion = self.langfuse_client.chat.completions.create(
-                            model=MODEL_NAME,
-                            messages=current_messages,
-                            temperature=temperature,
-                            max_tokens=max_tokens,
-                            name=f"{phase_name or 'general'}_interaction",
-                            metadata={
-                                "phase": self.current_phase,
-                                "attempt": attempt + 1,
-                                "session_id": self.session_id
-                            }
-                        )
+                        # Build metadata for trace enrichment
+                        metadata = {
+                            "langfuse_session_id": self.session_id,
+                            "langfuse_user_id": self.user_id,  # Weekly profile tracking
+                            "langfuse_tags": [
+                                f"variant:{self.prompt_tone}" if self.prompt_tone else "variant:unknown",
+                                f"week:{self.user_id}",
+                                f"phase:{self.current_phase}",
+                                "gtd-review"
+                            ],
+                            # Custom metadata (not prefixed with langfuse_)
+                            "phase_name": phase_name or "general",
+                            "tone": self.prompt_tone,
+                            "attempt": attempt + 1,
+                            "review_timestamp": self.session_id
+                        }
+                        
+                        # Add Graphiti batch ID if available
+                        if hasattr(self, 'current_graphiti_batch_id') and self.current_graphiti_batch_id:
+                            metadata["graphiti_batch_id"] = self.current_graphiti_batch_id
+                        
+                        # Add Timing session status
+                        metadata["timing_session_active"] = self.timing_projects is not None
+                        
+                        # Add phase-specific metrics if available
+                        if self.current_phase in self.phase_metrics:
+                            for key, value in self.phase_metrics[self.current_phase].items():
+                                metadata[f"phase_{key}"] = value
+                        
+                        # Build kwargs for OpenAI call
+                        openai_kwargs = {
+                            "model": self.model_name if hasattr(self, 'model_name') else MODEL_NAME,
+                            "messages": current_messages,
+                            "temperature": temperature,
+                            "max_tokens": max_tokens,
+                            "timeout": 30,
+                            "metadata": metadata
+                        }
+                        
+                        # Add prompt linking if using Langfuse OpenAI wrapper and have a prompt
+                        if LANGFUSE_OPENAI_AVAILABLE and self.langfuse_prompts and hasattr(self, 'system_prompt'):
+                            openai_kwargs["langfuse_prompt"] = self.system_prompt  # Links prompt to trace
+                        
+                        # Make the API call
+                        completion = self.openai_client.chat.completions.create(**openai_kwargs)
                         assistant_message = completion.choices[0].message.content
+                        
                     except Exception as e:
-                        self.logger.warning(f"Langfuse call failed, falling back to direct API: {e}")
-                        # Fall back to direct API
+                        self.logger.warning(f"OpenAI client call failed, falling back to direct HTTP: {e}")
+                        # Fall back to direct HTTP API
                         response = session.post(API_URL, json={
-                            "model": MODEL_NAME,
+                            "model": self.model_name if hasattr(self, 'model_name') else MODEL_NAME,
                             "messages": current_messages,
                             "temperature": temperature,
                             "max_tokens": max_tokens
@@ -244,9 +535,9 @@ class GTDCoach:
                         response.raise_for_status()
                         assistant_message = response.json()['choices'][0]['message']['content']
                 else:
-                    # Direct API call
+                    # Direct HTTP API call (no OpenAI client available)
                     response = session.post(API_URL, json={
-                        "model": MODEL_NAME,
+                        "model": self.model_name if hasattr(self, 'model_name') else MODEL_NAME,
                         "messages": current_messages,
                         "temperature": temperature,
                         "max_tokens": max_tokens
@@ -279,7 +570,7 @@ class GTDCoach:
                 # Score the response if Langfuse is enabled
                 if self.langfuse_enabled and LANGFUSE_AVAILABLE:
                     response_time = time.time() - message_start_time
-                    score_response(self.current_phase, True, response_time)
+                    score_response(self.current_phase, True, response_time, session_id=self.session_id)
                 
                 return assistant_message
                 
@@ -334,7 +625,7 @@ class GTDCoach:
                     # Score the failure if Langfuse is enabled
                     if self.langfuse_enabled and LANGFUSE_AVAILABLE:
                         response_time = time.time() - message_start_time
-                        score_response(self.current_phase, False, response_time)
+                        score_response(self.current_phase, False, response_time, session_id=self.session_id)
                     
                     return None
         
@@ -351,6 +642,11 @@ class GTDCoach:
         self.start_timer(duration_minutes, f"{phase_name} phase complete!")
         self.logger.info(f"Starting phase: {phase_name} ({duration_minutes} minutes)")
         
+        # Store phase start time for prompt compilation
+        if not hasattr(self, 'phase_start_times'):
+            self.phase_start_times = {}
+        self.phase_start_times[phase_name.upper()] = phase_start
+        
         # Record phase start in memory
         self.current_phase = phase_name.upper().replace(" ", "_")
         self.loop.create_task(self.memory.add_phase_transition(phase_name, "start"))
@@ -363,6 +659,9 @@ class GTDCoach:
         self.review_data["phase_durations"][phase_name] = duration
         self.logger.info(f"Phase completed: {phase_name} - Duration: {duration/60:.1f} minutes")
         print(f"\n✓ {phase_name} completed in {duration/60:.1f} minutes")
+        
+        # Capture phase metrics for trace enrichment
+        self.complete_phase(phase_name.upper().replace(" ", "_"))
         
         # Record phase end and flush episodes
         self.loop.create_task(self.memory.add_phase_transition(phase_name, "end", duration))
