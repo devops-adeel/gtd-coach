@@ -257,10 +257,111 @@ docker compose run gtd-coach python3 test_timing_graphiti_integration.py
 - `/report`: Aggregated project summaries for overview
 - Parameters optimized for 3-second timeout constraint
 
+## Graphiti Integration with Custom GTD Entities (FULLY IMPLEMENTED)
+
+### Implementation Status (August 2025)
+- ✅ **Custom Entity Extraction**: GTD-specific entities via Graphiti v0.18.5
+- ✅ **User Context Centering**: Creates user node at review start for personalized searches
+- ✅ **Cost-Aware Batching**: Intelligent batching to reduce API costs (~$0.01 per review)
+- ✅ **Lightweight ADHD Detection**: Real-time pattern detection during interactions
+- ✅ **Enhanced Monitoring**: Graphiti operations tracked in Langfuse
+- ✅ **Selective Entity Application**: Custom entities only for content-rich episodes
+
+### Cost & Performance Optimizations
+- **Batch Size**: 5 episodes default (configurable via `GRAPHITI_BATCH_SIZE`)
+- **Skip Trivial**: Filters out "ok", "yes", "thanks" etc. (`GRAPHITI_SKIP_TRIVIAL=true`)
+- **Concurrency Limit**: 2 simultaneous LLM calls (`SEMAPHORE_LIMIT=2`)
+- **Selective Sending**: Critical episodes sent immediately, others batched
+- **Dual Mode**: JSON backup ensures zero data loss while optimizing Graphiti usage
+
+### Real-time ADHD Support
+The system now detects patterns DURING interaction:
+- **Rapid Switching**: >3 topic changes in 30 seconds triggers intervention
+- **Gentle Interventions**: Non-disruptive reminders to refocus
+- **Pattern Tracking**: All interventions logged for analysis
+
+### Custom Entity Types (ACTIVE)
+The system uses GTD-specific entity extraction via Pydantic models in `gtd_entities.py`:
+
+```python
+# Available GTD Entity Types
+- GTDProject: Projects with status, area of focus, next action, outcome
+- GTDAction: Next actions with context, priority, energy level, time estimate
+- GTDContext: Contexts like @home, @office with available time and tools
+- GTDAreaOfFocus: Areas of responsibility with projects and maintenance tasks
+- ADHDPattern: Behavioral patterns with severity, triggers, and duration
+- MindsweepItem: Captured items with processing status
+- WeeklyReview: Review session metadata with completion metrics
+- TimingInsight: Focus scores and productivity metrics from Timing app
+```
+
+### Testing & Validation Commands
+
+```bash
+# Test Graphiti connection and basic operations
+python3 test_graphiti_connection.py
+
+# Test enhanced features (user context, batching, ADHD detection)
+python3 test_enhanced_graphiti.py
+
+# Test GTD entity extraction (OLD - for reference)
+python3 test_gtd_entity_extraction.py
+
+# Test custom entity extraction (NEW - validates v0.18.5 features)
+python3 test_custom_entities.py
+
+# Check Neo4j database state
+python3 check_neo4j_state.py
+
+# Run GTD data validation
+python3 gtd_validation.py
+
+# Benchmark performance (WARNING: may timeout with many iterations)
+python3 benchmark_gtd_operations.py --iterations 2
+
+# Migration commands
+python3 migrate_to_graphiti.py  # Dry run by default
+# Set MIGRATION_DRY_RUN=false in .env.graphiti for actual migration
+```
+
+### Configuration (.env.graphiti)
+```bash
+# Performance tuning
+SEMAPHORE_LIMIT=2          # Concurrent LLM operations limit
+GRAPHITI_BATCH_SIZE=5      # Episodes per batch
+GRAPHITI_SKIP_TRIVIAL=true # Skip trivial responses
+USE_GTD_ENTITIES=true      # Use custom entities when available
+```
+
+### Performance Targets
+- Episode creation: <100ms (real-time capture)
+- Mind sweep search: <200ms (review flow)
+- Priority retrieval: <150ms (quick decisions)
+- ADHD pattern detection: <500ms (can be async)
+- Context query: <200ms (context switching)
+- Project search: <250ms (project review)
+
+### Migration Cost Estimates
+Based on current data (21 files, 47 episodes):
+- Total cost: ~$0.003 (negligible)
+- Time: ~24 seconds
+- Incremental migration supported with rollback points
+
+### Validation Checks
+The `gtd_validation.py` script checks for:
+1. Actions without contexts
+2. Projects without next actions
+3. Temporal consistency
+4. Mind sweep processing rate
+5. Review frequency
+6. ADHD pattern tracking
+7. Priority distribution
+8. Data quality (duplicates, empty relationships)
+
 ## Future Enhancement Opportunities
 
 1. **Timing App Integration**: ✅ IMPLEMENTED - Real project data from Timing.app
-2. **Graphiti Memory**: ✅ IMPLEMENTED - Tracks patterns across reviews for insights
+2. **Graphiti Memory**: ✅ ENHANCED - Custom GTD entities with validation
 3. **Langfuse Observability**: ✅ IMPLEMENTED - LLM performance monitoring
 4. **Metrics Dashboard**: Visualize review completion and patterns
 5. **Cross-Platform Support**: Replace macOS-specific components

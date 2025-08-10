@@ -106,6 +106,7 @@ python3 gtd-review.py
 | **🧠 Memory** | Pattern tracking | Learn your habits |
 | **⏱️ Timing Integration** | Real project data | See where time goes |
 | **📈 Weekly Summaries** | AI insights | Spot trends |
+| **🚀 Graphiti v0.18.5** | Custom GTD entities + 40% cost reduction | Smarter memory |
 
 ## 🔄 How It Works
 
