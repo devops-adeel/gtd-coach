@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gtd-coach"
+version = "1.0.0"
+description = "ADHD-optimized Getting Things Done (GTD) weekly review system"
+readme = "README.md"
+authors = [
+    {name = "GTD Coach Team"}
+]
+license = {text = "MIT"}
+requires-python = ">=3.8"
+keywords = ["gtd", "adhd", "productivity", "coaching", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Office/Business :: Scheduling",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "requests==2.32.4",
+    "python-dotenv==1.1.1",
+    "graphiti-core[openai]==0.18.5",
+    "neo4j==5.28.2",
+    "langfuse[openai]==3.2.3"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+gtd-coach = "gtd_coach.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/gtd-coach"
+Repository = "https://github.com/yourusername/gtd-coach.git"
+Issues = "https://github.com/yourusername/gtd-coach/issues"
+
+[tool.setuptools]
+packages = ["gtd_coach"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gtd_coach*"]
+exclude = ["tests*", "examples*", "scripts*", "docs*"]
+
+[tool.setuptools.package-data]
+gtd_coach = ["*.txt", "*.json", "*.md"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--verbose"
