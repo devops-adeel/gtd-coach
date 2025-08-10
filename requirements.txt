@@ -5,5 +5,9 @@ requests  # For LM Studio API calls
 asyncio   # Built-in, for async operations
 python-dotenv  # For loading environment variables from .env file
 
+# Graphiti Integration
+graphiti-core[openai]==0.18.5  # Knowledge graph memory with OpenAI support (upgraded for custom entity types)
+neo4j==5.26.0  # Neo4j driver for Python
+
 # Optional integrations
 langfuse[openai]>=2.0.0  # LLM observability with OpenAI integration (optional)
