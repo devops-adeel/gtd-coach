@@ -178,7 +178,8 @@ class NOf1Experimenter:
             "EXPERIMENT_OVERRIDE_STYLE": "coaching_style",
             "EXPERIMENT_OVERRIDE_LENGTH": "prompt_length",
             "EXPERIMENT_OVERRIDE_STRUCTURE": "prompt_structure",
-            "EXPERIMENT_OVERRIDE_ADHD": "adhd_language_pattern"
+            "EXPERIMENT_OVERRIDE_ADHD": "adhd_language_pattern",
+            "EXPERIMENT_OVERRIDE_INTERVENTIONS": "jitai_enabled"
         }
         
         for env_var, exp_var in var_mapping.items():
@@ -271,6 +272,8 @@ class NOf1Experimenter:
             self._apply_prompt_structure(coach_instance, config)
         elif variable == "adhd_language_pattern":
             self._apply_adhd_pattern(coach_instance, config)
+        elif variable == "jitai_enabled":
+            self._apply_intervention_config(coach_instance, config)
     
     def _apply_memory_strategy(self, coach: Any, config: Dict[str, Any]) -> None:
         """Apply memory retrieval strategy configuration"""
@@ -331,6 +334,30 @@ class NOf1Experimenter:
         coach.time_emphasis = config.get('time_emphasis', 'moderate')
         coach.urgency_level = config.get('urgency_level', 'balanced')
         coach.celebration_style = config.get('celebration_style', 'both')
+    
+    def _apply_intervention_config(self, coach: Any, config: Dict[str, Any]) -> None:
+        """Apply just-in-time intervention configuration"""
+        # Enable or disable interventions based on value
+        # For override, check if value is 'on' or config has interventions_enabled
+        if hasattr(coach, 'current_experiment_value'):
+            if coach.current_experiment_value == 'on':
+                coach.interventions_enabled = True
+            elif coach.current_experiment_value == 'off':
+                coach.interventions_enabled = False
+            else:
+                coach.interventions_enabled = config.get('interventions_enabled', False)
+        else:
+            coach.interventions_enabled = config.get('interventions_enabled', False)
+        
+        # Set intervention type (for future expansion beyond grounding)
+        coach.intervention_type = config.get('intervention_type', 'grounding')
+        
+        # Set cooldown between interventions (in seconds)
+        cooldown_minutes = config.get('cooldown_minutes', 10)
+        coach.intervention_cooldown = cooldown_minutes * 60
+        
+        logger.info(f"Interventions {'enabled' if coach.interventions_enabled else 'disabled'} "
+                   f"(type: {coach.intervention_type}, cooldown: {cooldown_minutes} min)")
     
     def log_session_start(self) -> None:
         """Log the start of an experimental session"""

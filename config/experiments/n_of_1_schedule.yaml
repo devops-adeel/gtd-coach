@@ -216,6 +216,36 @@ experiments:
     metrics_focus:
       - "time_to_first_capture"
       - "context_switches_per_minute"
+  
+  - week: 7
+    name: "Just-in-Time Interventions"
+    variable: "jitai_enabled"
+    description: "Test real-time interventions for rapid task switching"
+    conditions:
+      - value: "off"
+        description: "No interventions (baseline)"
+        config:
+          interventions_enabled: false
+      - value: "on"
+        description: "Interventions enabled with grounding exercise"
+        config:
+          interventions_enabled: true
+          intervention_type: "grounding"
+          cooldown_minutes: 10
+      - value: "off"  # ABAB repeat
+        description: "No interventions (baseline)"
+        config:
+          interventions_enabled: false
+      - value: "on"  # ABAB repeat
+        description: "Interventions enabled with grounding exercise"
+        config:
+          interventions_enabled: true
+          intervention_type: "grounding"
+          cooldown_minutes: 10
+    metrics_focus:
+      - "context_switches_per_minute"
+      - "task_followthrough_rate"
+      - "interventions_accepted"
 
 # Analysis configuration
 analysis:
@@ -233,6 +263,7 @@ override:
     - "EXPERIMENT_OVERRIDE_LENGTH"  # Override prompt length
     - "EXPERIMENT_OVERRIDE_STRUCTURE"  # Override structure
     - "EXPERIMENT_OVERRIDE_ADHD"  # Override ADHD pattern
+    - "EXPERIMENT_OVERRIDE_INTERVENTIONS"  # Override intervention enable/disable
   
 # Success criteria for each North Star metric
 success_criteria:

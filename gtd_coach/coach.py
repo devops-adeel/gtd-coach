@@ -101,7 +101,10 @@ class GTDCoach:
             "projects_reviewed": 0,
             "decisions_made": 0,
             "items_captured": 0,
-            "phase_durations": {}
+            "phase_durations": {},
+            "interventions_offered": 0,
+            "interventions_accepted": 0,
+            "interventions_skipped": 0
         }
         self.priorities = []  # Store priorities for wrap-up phase
         self.mindsweep_items = []  # Store mindsweep items for pattern detection
@@ -110,6 +113,10 @@ class GTDCoach:
         self.memory = GraphitiMemory(self.session_id)
         self.pattern_detector = ADHDPatternDetector()
         self.current_phase = "STARTUP"
+        
+        # Initialize intervention system
+        self.interventions_enabled = False  # Will be set by N-of-1 config
+        self.last_intervention_time = None  # For cooldown tracking
         
         # Initialize North Star metrics tracking
         from gtd_coach.metrics import NorthStarMetrics
@@ -122,8 +129,12 @@ class GTDCoach:
         self.experimenter.log_session_start()
         
         # Initialize lightweight pattern detector for memory retrieval
-        from pattern_detector import PatternDetector
-        self.memory_patterns = PatternDetector()
+        try:
+            from pattern_detector import PatternDetector
+            self.memory_patterns = PatternDetector()
+        except ImportError:
+            self.logger.warning("Pattern detector not available for memory retrieval")
+            self.memory_patterns = None
         
         # Initialize Timing API
         self.timing_api = TimingAPI()
@@ -198,6 +209,9 @@ class GTDCoach:
                 'max_tokens': 400
             }
         }
+        
+        # Set up intervention callback for real-time pattern detection
+        self.memory.set_intervention_callback(self.handle_intervention)
         
         self.load_system_prompt()
     
@@ -697,6 +711,80 @@ class GTDCoach:
         
         return None
     
+    async def handle_intervention(self, message: str):
+        """
+        Handle intervention triggered by real-time pattern detection
+        This is called by GraphitiMemory when rapid switching is detected
+        
+        Args:
+            message: Intervention message from the pattern detector
+        """
+        # Check if interventions are enabled by N-of-1 experiment
+        if not self.interventions_enabled:
+            self.logger.debug(f"Intervention suggested but disabled: {message}")
+            return
+        
+        # Check cooldown (10 minutes between interventions)
+        if self.last_intervention_time:
+            time_since_last = time.time() - self.last_intervention_time
+            if time_since_last < 600:  # 10 minutes
+                self.logger.debug(f"Intervention skipped due to cooldown: {message}")
+                return
+        
+        # Track that we offered an intervention
+        self.review_data["interventions_offered"] += 1
+        self.last_intervention_time = time.time()
+        
+        # Offer the intervention to the user
+        print(f"\n💭 {message}")
+        print("Press Enter for a 30-second grounding exercise, or any other key to continue: ")
+        
+        try:
+            # Get user response with a timeout
+            start_time = time.time()
+            response = input()
+            response_time = time.time() - start_time
+            
+            if response == "":
+                # User accepted the intervention
+                self.review_data["interventions_accepted"] += 1
+                self.logger.info(f"User accepted intervention after {response_time:.1f}s")
+                self.deliver_grounding_exercise()
+            else:
+                # User skipped the intervention
+                self.review_data["interventions_skipped"] += 1
+                self.logger.info(f"User skipped intervention after {response_time:.1f}s")
+                print("Continuing with review...")
+        except Exception as e:
+            self.logger.error(f"Error handling intervention: {e}")
+    
+    def deliver_grounding_exercise(self):
+        """
+        Deliver the 5-4-3-2-1 grounding exercise
+        This helps reduce ADHD-related anxiety and refocus attention
+        """
+        print("\n🌟 Let's take 30 seconds to ground ourselves...")
+        print("\nThis quick exercise will help refocus your attention.")
+        print("\n5-4-3-2-1 Grounding Technique:")
+        
+        exercises = [
+            ("5", "Name 5 things you can SEE around you"),
+            ("4", "Notice 4 things you can TOUCH"),
+            ("3", "Listen for 3 things you can HEAR"),
+            ("2", "Identify 2 things you can SMELL"),
+            ("1", "Notice 1 thing you can TASTE")
+        ]
+        
+        for number, instruction in exercises:
+            print(f"\n{number}: {instruction}")
+            time.sleep(5)  # Give 5 seconds for each sense
+        
+        print("\n✨ Great job! You're now more grounded and focused.")
+        print("Let's continue with your review...\n")
+        
+        # Log completion
+        self.logger.info("Grounding exercise completed")
+    
     def phase_timer(self, phase_name, duration_minutes):
         """Track phase duration"""
         phase_start = time.time()
@@ -746,7 +834,10 @@ class GTDCoach:
             # Continue anyway with JSON backup
         
         # Load and display pre-computed context (instant, zero-friction)
-        context = self.memory_patterns.load_context()
+        if self.memory_patterns:
+            context = self.memory_patterns.load_context()
+        else:
+            context = None
         if context and context.get('patterns'):
             print("\n💭 On your mind lately:")
             for pattern in context['patterns'][:3]:  # Show top 3 patterns
