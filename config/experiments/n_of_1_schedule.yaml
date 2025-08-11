@@ -246,6 +246,37 @@ experiments:
       - "context_switches_per_minute"
       - "task_followthrough_rate"
       - "interventions_accepted"
+  
+  - week: 8
+    name: "Real-time Adaptive Behavior"
+    variable: "adaptive_behavior"
+    description: "Test state-based adaptive responses to user patterns"
+    conditions:
+      - value: "off"
+        description: "Standard responses (baseline)"
+        config:
+          adaptive_enabled: false
+      - value: "on"
+        description: "Adaptive responses based on user state"
+        config:
+          adaptive_enabled: true
+          adapt_prompts: true
+          adapt_settings: true
+      - value: "off"  # ABAB repeat
+        description: "Standard responses (baseline)"
+        config:
+          adaptive_enabled: false
+      - value: "on"  # ABAB repeat
+        description: "Adaptive responses based on user state"
+        config:
+          adaptive_enabled: true
+          adapt_prompts: true
+          adapt_settings: true
+    metrics_focus:
+      - "engagement_level"
+      - "completion_rate"
+      - "time_to_first_capture"
+      - "state_adaptations"
 
 # Analysis configuration
 analysis:
