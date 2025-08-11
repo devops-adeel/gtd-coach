@@ -238,13 +238,41 @@ python3 test_pattern_learning.py
 - Correlation with Timing app data
 - Graphiti memory integration
 
+## Timing App Validation (Phase 2.5)
+
+### Overview
+Enhanced pattern validation using Timing app data to understand the discrepancy between self-reported and actual time usage. This discrepancy is treated as valuable diagnostic information about executive function, not an error to correct.
+
+### Implementation
+- **Non-invasive Integration**: Added `enrich_with_timing_patterns()` method to existing `ADHDPatternAnalyzer`
+- **Pattern Classification**: 
+  - `high_awareness`: Good self-awareness (>70% project coverage)
+  - `selective_awareness`: Remembers important work, forgets routine (40-70%)
+  - `time_blindness`: Significant executive function challenge (<40%)
+- **Invisible Work Ratio**: Calculates percentage of work time not mentioned in reviews
+- **Fire-and-forget**: Async enrichment with 3-second timeout, no session disruption
+
+### Insights Generated
+- **Time Blindness Pattern**: Validates ADHD time blindness with compassionate framing
+- **Selective Awareness**: Explains focus on memorable vs routine work
+- **Invisible Work**: Acknowledges reactive/unplanned work as valid
+
+### Testing
+All Timing validation tests pass:
+- Graceful degradation without Timing data
+- Pattern detection accuracy
+- Invisible work calculations
+- Timeout handling
+- Insight generation
+
 ## Summary
 
 Phase 2 successfully implements a comprehensive pattern learning system that:
 - Detects ADHD-specific behavioral patterns
+- Validates patterns with objective Timing data (Phase 2.5)
 - Adapts thresholds to individual baselines
 - Generates actionable, template-based insights
 - Maintains zero-friction user experience
 - Provides foundation for Phase 3 interventions
 
-The system is production-ready and will continuously improve coaching quality through data-driven personalization.
+The system is production-ready and will continuously improve coaching quality through data-driven personalization and validation.
