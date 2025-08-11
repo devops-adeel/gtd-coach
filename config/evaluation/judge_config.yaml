@@ -1,0 +1,92 @@
+# LLM-as-a-Judge Evaluation Configuration for GTD Coach
+# This configuration controls the post-session evaluation system
+
+evaluation:
+  # Master switch for evaluation system
+  enabled: true
+  
+  # Evaluation mode: post_session -> phase_boundary -> real_time (progressive enhancement)
+  mode: "post_session"
+  
+  # Model configuration for different evaluation tasks
+  models:
+    # Local model for fast screening (runs on LM Studio)
+    screening: "local-llama-3.1-8b"
+    
+    # Cloud models for specific evaluations (OpenAI)
+    task_extraction: "gpt-4o-mini"      # Cheap, fast, accurate for task detection
+    memory_relevance: "gpt-4o-mini"     # Cheap, fast for relevance scoring
+    coaching_quality: "gpt-4o"          # More sophisticated for quality assessment
+    
+  # Evaluation thresholds (will be personalized based on user history)
+  thresholds:
+    task_extraction: 0.7    # Minimum acceptable task extraction accuracy
+    memory_relevance: 0.5   # Minimum acceptable memory relevance
+    coaching_quality: 0.6   # Minimum acceptable coaching quality
+    
+  # Intervention configuration (disabled initially for observation)
+  interventions:
+    enabled: false          # Start with observation only
+    max_per_session: 2      # Maximum interventions per session
+    timing: "phase_boundary" # When to intervene: phase_boundary, immediate, post_session
+    min_confidence: 0.8     # Minimum confidence to trigger intervention
+    
+  # Batching configuration for efficient processing
+  batching:
+    size: 3                 # Number of interactions per batch (reduced for reliability)
+    timeout: 30.0           # Timeout in seconds per batch (increased for cloud APIs)
+    parallel: true          # Process batches in parallel
+    
+  # Fallback configuration for resilience
+  fallback:
+    use_local: true         # Use local model if cloud fails
+    timeout: 5.0            # Timeout for fallback attempts
+    max_retries: 2          # Maximum retry attempts
+    
+  # Cost control settings
+  cost_control:
+    max_per_session: 0.05   # Maximum cost per session in USD
+    daily_limit: 2.00       # Daily spending limit in USD
+    sampling_rate: 1.0      # Fraction of interactions to evaluate (1.0 = all)
+    
+  # Phases to prioritize for evaluation (reduce costs)
+  priority_phases:
+    - "MIND_SWEEP"          # Critical for task extraction
+    - "PRIORITIZATION"      # Critical for coaching quality
+    - "PROJECT_REVIEW"      # Important for memory usage
+    
+  # Logging and monitoring
+  logging:
+    level: "INFO"           # Logging level: DEBUG, INFO, WARNING, ERROR
+    save_raw_responses: false # Save raw LLM responses for debugging
+    
+  # Integration with existing systems
+  integrations:
+    langfuse:
+      enabled: true         # Send scores to Langfuse
+      batch_size: 10        # Batch size for Langfuse uploads
+      
+    n_of_1:
+      enabled: true         # Correlate with N-of-1 experiments
+      track_with_metrics: true # Include in North Star metrics
+      
+    graphiti:
+      enabled: false        # Store evaluations in knowledge graph (future)
+      
+  # Personalization settings
+  personalization:
+    enabled: true           # Enable personalized thresholds
+    min_history: 5          # Minimum sessions before personalization
+    recalibration_interval: 7 # Days between threshold recalibration
+    
+  # A/B testing configuration
+  ab_testing:
+    enabled: false          # Enable A/B testing of interventions
+    control_group_size: 0.5 # Fraction of sessions in control group
+    
+# Environment variable overrides
+# Set these to override configuration:
+# - EVAL_ENABLED=false           # Disable evaluation completely
+# - EVAL_MODE=phase_boundary     # Change evaluation mode
+# - EVAL_SAMPLING_RATE=0.5       # Sample only 50% of interactions
+# - EVAL_INTERVENTIONS=true      # Enable interventions
