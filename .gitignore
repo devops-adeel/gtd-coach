@@ -42,6 +42,7 @@ data/mindsweep_*.json
 data/priorities_*.json
 data/graphiti_batch_*.json
 data/next_session_context.json
+data/evaluations/
 logs/review_*.json
 logs/session_*.log
 summaries/weekly_summary_*.md
