@@ -103,14 +103,34 @@ docker compose up gtd-coach
 
 ```
 gtd_coach/              # Main application package
-├── coach.py            # Core GTD coach logic
-├── patterns/           # ADHD pattern detection
-└── integrations/       # Optional service integrations
+├── coach.py            # Core GTD coach orchestrator
+├── evaluation/         # LLM-as-a-Judge evaluation system
+├── experiments/        # N-of-1 experiment framework
+├── integrations/       # External service integrations
+├── metrics/            # North Star metrics & adaptive thresholds
+└── patterns/           # ADHD pattern detection & analysis
+
+config/                 # Configuration files
+├── evaluation/        # Judge configuration
+├── experiments/       # N-of-1 experiment schedules
+└── pattern_learning/  # Pattern detection settings
 
 docs/                   # Documentation
-config/                 # Configuration files
+├── development/        # Development & implementation docs
+└── integrations/       # Integration guides
+
 scripts/                # Utility scripts
+├── analysis/          # Data analysis tools
+├── maintenance/       # Cleanup & maintenance scripts
+└── validation/        # Testing & validation tools
+
 tests/                  # Test suite
+├── unit/              # Unit tests
+└── integration/       # Integration tests
+
+data/                   # Session data (gitignored)
+logs/                   # Session logs (gitignored)
+summaries/             # Weekly summaries (gitignored)
 ```
 
 ## Configuration
