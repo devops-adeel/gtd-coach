@@ -12,4 +12,7 @@ neo4j==5.28.2  # Neo4j driver for Python (released July 30, 2025, latest)
 # LLM Observability
 langfuse[openai]==3.2.3  # LLM observability with OpenAI integration (latest as of Aug 2025)
 
+# Configuration
+PyYAML>=6.0  # For YAML configuration files (experiment schedules)
+
 # Note: asyncio is a built-in Python module and doesn't need to be installed
