@@ -1,0 +1,151 @@
+# Adaptive Behavior Rules Configuration
+# Defines triggers and actions for real-time adaptation
+
+adaptation_rules:
+  # Fatigue detection and response
+  fatigue_detection:
+    triggers:
+      - response_time_gt: 10  # seconds - slow response
+      - short_responses_gt: 3  # consecutive short responses
+      - energy_level: "low"
+    actions:
+      - shorten_prompts: true
+      - increase_encouragement: true
+      - suggest_break: after_phase
+      - max_tokens: 100
+      - temperature: 0.7
+    
+  # Confusion detection and response
+  confusion_detection:
+    triggers:
+      - confusion_markers_gt: 2
+      - confusion_level_gt: 0.5
+      - contains_phrases:
+        - "don't understand"
+        - "confused"
+        - "not sure what"
+    actions:
+      - simplify_language: true
+      - add_examples: true
+      - slow_pace: true
+      - provide_structure: true
+      - temperature: 0.6
+  
+  # Disengagement detection and response
+  disengagement_detection:
+    triggers:
+      - minimal_responses_gt: 2
+      - response_time_lt: 2  # too quick
+      - engagement_level_lt: 0.6
+    actions:
+      - increase_energy: true
+      - add_celebration: true
+      - vary_prompts: true
+      - personalize_more: true
+      - temperature: 0.9
+  
+  # High stress detection and response
+  stress_detection:
+    triggers:
+      - stress_indicators_gte: 2
+      - context_switches_gt: 3
+      - rapid_responses: true
+    actions:
+      - calming_tone: true
+      - suggest_grounding: true
+      - reduce_complexity: true
+      - offer_break: true
+      - temperature: 0.6
+
+# Phase-specific overrides
+phase_overrides:
+  MIND_SWEEP:
+    fatigue_detection:
+      actions:
+        - message: "Just capture what comes to mind, no need to be complete."
+        - allow_early_exit: true
+    
+    confusion_detection:
+      actions:
+        - message: "Let's just get things out of your head. Don't worry about organizing."
+        - skip_processing: true
+  
+  PROJECT_REVIEW:
+    fatigue_detection:
+      actions:
+        - message: "Quick decisions only - we can revisit later."
+        - reduce_projects: true
+        - time_per_project: 30  # seconds
+    
+    disengagement_detection:
+      actions:
+        - message: "You're doing great! Each decision moves you forward!"
+        - highlight_progress: true
+  
+  PRIORITIZATION:
+    stress_detection:
+      actions:
+        - message: "Remember: not everything needs to be an A priority. Be kind to yourself."
+        - suggest_abc_balance: true
+    
+    confusion_detection:
+      actions:
+        - provide_criteria: true
+        - show_examples: true
+
+# Intervention thresholds
+intervention_thresholds:
+  min_time_between_interventions: 600  # 10 minutes
+  max_interventions_per_session: 3
+  cooldown_after_acceptance: 900  # 15 minutes
+  cooldown_after_rejection: 300   # 5 minutes
+
+# Encouragement messages by phase and progress
+encouragement_messages:
+  MIND_SWEEP:
+    0.5: "Great job getting things out of your head!"
+    0.8: "Almost done with mind sweep - you're doing fantastic!"
+    1.0: "Excellent mind sweep! Your brain must feel lighter!"
+  
+  PROJECT_REVIEW:
+    0.3: "Good progress on your projects!"
+    0.6: "You're making great decisions!"
+    0.9: "Almost through - each decision counts!"
+  
+  PRIORITIZATION:
+    0.5: "Nice work prioritizing!"
+    0.8: "Your priorities are taking shape!"
+    1.0: "Priorities set - you're ready for the week!"
+  
+  WRAP_UP:
+    0.5: "Great review session!"
+    1.0: "Amazing job completing your review! 🎉"
+
+# State detection thresholds
+state_thresholds:
+  response_time:
+    slow: 10.0  # seconds
+    fast: 2.0   # seconds
+  
+  response_length:
+    short: 5    # words
+    minimal: 2  # words
+  
+  confusion:
+    low: 0.3
+    moderate: 0.5
+    high: 0.7
+  
+  engagement:
+    disengaged: 0.4
+    low: 0.6
+    normal: 0.8
+  
+  stress:
+    elevated: 2   # indicators
+    high: 3       # indicators
+  
+  context_switches:
+    normal: 2     # per phase
+    elevated: 3   # per phase
+    excessive: 5  # per phase
