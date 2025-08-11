@@ -54,6 +54,13 @@ except ImportError:
     LANGFUSE_AVAILABLE = False
     observe = lambda *args, **kwargs: lambda func: func  # No-op decorator
 
+# Import LLM-as-a-Judge evaluation system
+try:
+    from gtd_coach.evaluation import PostSessionEvaluator
+    EVALUATION_AVAILABLE = True
+except ImportError:
+    EVALUATION_AVAILABLE = False
+
 # Configuration
 API_URL = "http://localhost:1234/v1/chat/completions"
 MODEL_NAME = "meta-llama-3.1-8b-instruct"  # Actual model name for API
@@ -156,6 +163,17 @@ class GTDCoach:
             except Exception as e:
                 self.logger.warning(f"Langfuse prompt management initialization failed: {e}")
                 self.langfuse_prompts = None
+        
+        # Initialize LLM-as-a-Judge evaluation system
+        self.evaluator = None
+        self.interaction_history = []  # Track interactions for evaluation
+        if EVALUATION_AVAILABLE:
+            try:
+                self.evaluator = PostSessionEvaluator()
+                self.logger.info("LLM-as-a-Judge evaluation system enabled")
+            except Exception as e:
+                self.logger.warning(f"Evaluation system initialization failed: {e}")
+                self.evaluator = None
         
         # Phase-specific settings for optimal LLM performance
         self.phase_settings = {
@@ -595,6 +613,20 @@ class GTDCoach:
                     )
                 
                 self.logger.info(f"LLM response received - Length: {len(assistant_message)} chars")
+                
+                # Track interaction for evaluation
+                if self.evaluator:
+                    interaction_data = {
+                        'timestamp': datetime.now().isoformat(),
+                        'phase': self.current_phase,
+                        'user_input': content,
+                        'coach_response': assistant_message,
+                        'time_remaining': getattr(self, 'current_phase_time_remaining', None),
+                        'experiment_variable': getattr(self, 'current_experiment_variable', None),
+                        'retrieved_memories': getattr(self, 'last_retrieved_memories', []),
+                        'extracted_tasks': getattr(self, 'last_extracted_tasks', [])
+                    }
+                    self.interaction_history.append(interaction_data)
                 
                 # Score the response if Langfuse is enabled
                 if self.langfuse_enabled and LANGFUSE_AVAILABLE:
@@ -1350,6 +1382,19 @@ def main():
         coach.run_project_review_phase()
         coach.run_prioritization_phase()
         coach.run_wrapup_phase()
+        
+        # Trigger post-session evaluation (fire-and-forget)
+        if coach.evaluator and coach.interaction_history:
+            print("\n📊 Queueing session evaluation...")
+            session_data = {
+                'session_id': coach.session_id,
+                'interactions': coach.interaction_history,
+                'duration': (datetime.now() - coach.review_start_time).total_seconds() / 60,
+                'review_data': coach.review_data,
+                'north_star_metrics': coach.north_star.get_all_metrics() if hasattr(coach, 'north_star') else {}
+            }
+            coach.evaluator.evaluate_session(session_data)
+            coach.logger.info("Post-session evaluation queued")
         
     except KeyboardInterrupt:
         print("\n\n⚠️  Review interrupted")
