@@ -15,4 +15,8 @@ langfuse[openai]==3.2.3  # LLM observability with OpenAI integration (latest as 
 # Configuration
 PyYAML>=6.0  # For YAML configuration files (experiment schedules)
 
+# Pattern Learning and Analysis (Phase 2)
+scipy>=1.10.0  # For statistical analysis and trend detection
+numpy>=1.24.0  # For numerical operations and pattern analysis
+
 # Note: asyncio is a built-in Python module and doesn't need to be installed
