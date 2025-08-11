@@ -222,6 +222,48 @@ class EvaluationAnalytics:
                         "This might indicate overall fatigue or need for a break from reviews."
                     )
         
+        # Timing validation insights
+        if 'timing_validation' in pattern_data:
+            timing_data = pattern_data['timing_validation']
+            
+            if timing_data.get('data_available'):
+                pattern = timing_data.get('discrepancy_pattern')
+                invisible_ratio = timing_data.get('invisible_work_ratio', 0)
+                
+                # Discrepancy pattern insights
+                if pattern == 'time_blindness':
+                    insights.append(
+                        "🕐 **Time Blindness Pattern Detected**: Your brain naturally focuses on memorable work "
+                        "and filters out routine tasks. This is typical ADHD time blindness - not a character flaw. "
+                        "Consider asking yourself 'What took up time today?' as a daily reflection prompt."
+                    )
+                elif pattern == 'selective_awareness':
+                    insights.append(
+                        "🎯 **Selective Time Awareness**: You accurately track high-focus work but lose track of "
+                        "task-switching time. This executive function pattern is common in ADHD. "
+                        "Try time-blocking for both focused AND transition time."
+                    )
+                elif pattern == 'high_awareness':
+                    insights.append(
+                        "✨ **Strong Time Awareness**: You have good awareness of where your time goes! "
+                        "This is an excellent foundation for productivity."
+                    )
+                
+                # Invisible work insights
+                if invisible_ratio > 0.6:
+                    pct = int(invisible_ratio * 100)
+                    insights.append(
+                        f"👻 **High Invisible Work Ratio ({pct}%)**: About {pct}% of your work happens 'invisibly' - "
+                        "not captured in reviews. This reactive work is real and valid. "
+                        "Consider explicitly scheduling 'buffer time' for unexpected tasks."
+                    )
+                elif invisible_ratio > 0.4:
+                    pct = int(invisible_ratio * 100)
+                    insights.append(
+                        f"📋 **Moderate Invisible Work ({pct}%)**: Some routine work isn't making it into your reviews. "
+                        "This is normal - not everything needs to be tracked, but awareness helps planning."
+                    )
+        
         return insights
     
     def create_weekly_summary(self, week_start: Optional[datetime] = None) -> Dict[str, Any]:
