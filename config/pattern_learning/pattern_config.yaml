@@ -1,0 +1,162 @@
+# Pattern Learning Configuration for GTD Coach
+# Phase 2: Learning from Evaluation Data
+
+pattern_learning:
+  # Master switch for pattern learning
+  enabled: true
+  
+  # Minimum sessions required before pattern analysis
+  min_sessions: 5
+  
+  # ADHD-specific pattern detection
+  adhd_patterns:
+    # Time blindness detection
+    time_blindness:
+      enabled: true
+      threshold: 0.5  # Score below this indicates time blindness
+      indicators:
+        - lack_of_time_awareness
+        - rush_patterns
+        - time_estimation_errors
+    
+    # Task switching analysis
+    task_switching:
+      enabled: true
+      threshold: 3.0  # Switches per session above this is high
+      indicators:
+        - topic_changes
+        - incomplete_thoughts
+        - return_to_previous_topics
+    
+    # Executive function assessment
+    executive_function:
+      enabled: true
+      threshold: 0.6  # Score below this needs support
+      indicators:
+        - task_extraction_accuracy
+        - memory_utilization
+        - structure_adherence
+    
+    # Fatigue detection
+    fatigue_detection:
+      enabled: true
+      threshold: 0.5  # Occurrence rate above this is concerning
+      indicators:
+        - declining_scores
+        - shorter_responses
+        - reduced_quality_later_phases
+  
+  # Statistical analysis settings
+  statistics:
+    # Rolling window for trend calculation
+    window_size: 7
+    
+    # Anomaly detection
+    anomaly_detection:
+      enabled: true
+      threshold_multiplier: 2.0  # Standard deviations for anomaly
+      min_baseline_sessions: 5
+    
+    # Clustering configuration
+    clustering:
+      enabled: true
+      n_clusters: 3  # high/moderate/needs_improvement
+      min_sessions: 10
+  
+  # Adaptive threshold configuration
+  adaptive_thresholds:
+    enabled: true
+    
+    # Rate of threshold adjustment (0.0-1.0)
+    adjustment_rate: 0.1
+    
+    # Minimum data points before personalization
+    min_data_points: 5
+    
+    # Threshold bounds
+    bounds:
+      task_extraction:
+        min: 0.5
+        max: 0.9
+      memory_relevance:
+        min: 0.3
+        max: 0.8
+      coaching_quality:
+        min: 0.4
+        max: 0.85
+  
+  # Insight generation
+  insights:
+    # Generate insights in weekly summary
+    generate_weekly: true
+    
+    # Use LLM for enhanced insights (future)
+    use_llm: false
+    
+    # Maximum insights per summary
+    max_insights: 5
+    
+    # Priority for insight categories
+    priority:
+      - time_blindness  # Most critical for ADHD
+      - executive_function
+      - task_switching
+      - fatigue
+  
+  # Privacy and data retention
+  privacy:
+    # Days to retain evaluation data
+    retention_days: 30
+    
+    # Store only aggregate statistics
+    aggregate_only: true
+    
+    # Anonymize patterns before storage
+    anonymize_patterns: false
+  
+  # Performance settings
+  performance:
+    # Maximum processing time (ms)
+    max_latency: 100
+    
+    # Use async processing
+    async_processing: true
+    
+    # Cache insights for reuse
+    cache_insights: true
+    cache_ttl_minutes: 60
+  
+  # Integration settings
+  integrations:
+    # Langfuse metrics
+    langfuse:
+      enabled: true
+      fetch_scores: true
+      batch_size: 10
+    
+    # N-of-1 experiments
+    n_of_1:
+      enabled: true
+      use_for_testing: true
+    
+    # Graphiti memory (future)
+    graphiti:
+      enabled: false
+      store_patterns: false
+
+# Intervention triggers (for Phase 3)
+intervention_triggers:
+  # Severity levels that trigger interventions
+  severity_thresholds:
+    low: 0.3
+    moderate: 0.5
+    high: 0.7
+  
+  # Minimum confidence before intervention
+  min_confidence: 0.8
+  
+  # Maximum interventions per session
+  max_per_session: 2
+  
+  # Cooldown between interventions (minutes)
+  cooldown_minutes: 10
