@@ -104,7 +104,8 @@ class GTDCoach:
             "phase_durations": {},
             "interventions_offered": 0,
             "interventions_accepted": 0,
-            "interventions_skipped": 0
+            "interventions_skipped": 0,
+            "state_adaptations": []  # Track adaptive behavior
         }
         self.priorities = []  # Store priorities for wrap-up phase
         self.mindsweep_items = []  # Store mindsweep items for pattern detection
@@ -117,6 +118,11 @@ class GTDCoach:
         # Initialize intervention system
         self.interventions_enabled = False  # Will be set by N-of-1 config
         self.last_intervention_time = None  # For cooldown tracking
+        
+        # Initialize adaptive behavior system
+        from gtd_coach.adaptive import UserStateMonitor, AdaptiveResponseManager
+        self.state_monitor = UserStateMonitor()
+        self.response_adapter = AdaptiveResponseManager()
         
         # Initialize North Star metrics tracking
         from gtd_coach.metrics import NorthStarMetrics
@@ -482,6 +488,28 @@ class GTDCoach:
                     phase=self.current_phase
                 )
             )
+            
+            # Update user state based on interaction
+            if hasattr(self, 'state_monitor'):
+                response_time = time.time() - message_start_time
+                pattern_data = None
+                if hasattr(self, 'pattern_detector') and self.mindsweep_items:
+                    pattern_data = self.pattern_detector.analyze_mindsweep_coherence(self.mindsweep_items)
+                
+                state_changes = self.state_monitor.update_from_interaction(
+                    response_time=response_time,
+                    content=content,
+                    pattern_data=pattern_data
+                )
+                
+                # Log significant state changes
+                if state_changes:
+                    self.logger.info(f"User state changes detected: {state_changes}")
+                    self.review_data["state_adaptations"].append({
+                        "phase": self.current_phase,
+                        "changes": state_changes,
+                        "timestamp": time.time()
+                    })
         
         # Get phase-specific settings from prompt config or use defaults
         temperature = 0.8  # Better for conversational coaching
@@ -496,6 +524,31 @@ class GTDCoach:
             settings = self.phase_settings[phase_name]
             temperature = settings.get('temperature', temperature)
             max_tokens = settings.get('max_tokens', max_tokens)
+        
+        # Apply adaptive behavior if available
+        adaptations_applied = {}
+        if hasattr(self, 'state_monitor') and hasattr(self, 'response_adapter'):
+            user_state = self.state_monitor.get_state()
+            adaptations = self.response_adapter.get_adaptations(user_state, phase_name)
+            
+            # Apply adaptations to settings
+            if adaptations.get('settings'):
+                adapted_settings = self.response_adapter.adapt_settings(
+                    {'temperature': temperature, 'max_tokens': max_tokens},
+                    adaptations
+                )
+                temperature = adapted_settings.get('temperature', temperature)
+                max_tokens = adapted_settings.get('max_tokens', max_tokens)
+                adaptations_applied = adaptations
+                
+            # Apply adaptations to prompt (modify the last user message)
+            if adaptations.get('combined_prompt_modifier') and self.messages:
+                # Apply to the content variable that will be used
+                content = self.response_adapter.adapt_prompt(content, adaptations)
+                # Update the last message in history if it's a user message
+                if self.messages[-1].get('role') == 'user':
+                    self.messages[-1]['content'] = content
+                self.logger.debug(f"Applied prompt adaptations: {adaptations.get('flags', set())}")
         
         # Update system prompt for current phase if using Langfuse
         if self.langfuse_prompts and phase_name:
@@ -825,6 +878,10 @@ class GTDCoach:
         phase_start = self.phase_timer("Startup", 2)
         self.review_start_time = datetime.now()
         
+        # Reset state monitor for new phase
+        if hasattr(self, 'state_monitor'):
+            self.state_monitor.reset_phase()
+        
         # Initialize Graphiti memory connection
         self.logger.info("Initializing Graphiti memory...")
         try:
@@ -890,6 +947,10 @@ class GTDCoach:
         print("-"*50)
         
         phase_start = self.phase_timer("Mind Sweep", 10)
+        
+        # Reset state monitor for new phase
+        if hasattr(self, 'state_monitor'):
+            self.state_monitor.reset_phase()
         
         # Phase A: Initial Capture (5 minutes)
         print("\n📝 Phase A: CAPTURE (5 minutes)")
@@ -1116,6 +1177,10 @@ Mind sweep phase is now complete. Please provide encouragement and prepare me fo
         
         phase_start = self.phase_timer("Project Review", 12)
         
+        # Reset state monitor for new phase
+        if hasattr(self, 'state_monitor'):
+            self.state_monitor.reset_phase()
+        
         # Load projects (mock data for now)
         projects = self.load_projects()
         
@@ -1149,6 +1214,10 @@ Mind sweep phase is now complete. Please provide encouragement and prepare me fo
         print("-"*50)
         
         phase_start = self.phase_timer("Prioritization", 5)
+        
+        # Reset state monitor for new phase
+        if hasattr(self, 'state_monitor'):
+            self.state_monitor.reset_phase()
         
         # Get coach's prioritization guidance
         response = self.send_message("Guide me through prioritizing my next actions based on the review.", phase_name='PRIORITIZATION')
@@ -1187,6 +1256,10 @@ Mind sweep phase is now complete. Please provide encouragement and prepare me fo
         print("-"*50)
         
         phase_start = self.phase_timer("Wrap-up", 3)
+        
+        # Reset state monitor for new phase
+        if hasattr(self, 'state_monitor'):
+            self.state_monitor.reset_phase()
         
         # Analyze timing patterns if available
         timing_analysis = None

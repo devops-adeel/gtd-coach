@@ -179,7 +179,8 @@ class NOf1Experimenter:
             "EXPERIMENT_OVERRIDE_LENGTH": "prompt_length",
             "EXPERIMENT_OVERRIDE_STRUCTURE": "prompt_structure",
             "EXPERIMENT_OVERRIDE_ADHD": "adhd_language_pattern",
-            "EXPERIMENT_OVERRIDE_INTERVENTIONS": "jitai_enabled"
+            "EXPERIMENT_OVERRIDE_INTERVENTIONS": "jitai_enabled",
+            "EXPERIMENT_OVERRIDE_ADAPTIVE": "adaptive_behavior"
         }
         
         for env_var, exp_var in var_mapping.items():
@@ -274,6 +275,8 @@ class NOf1Experimenter:
             self._apply_adhd_pattern(coach_instance, config)
         elif variable == "jitai_enabled":
             self._apply_intervention_config(coach_instance, config)
+        elif variable == "adaptive_behavior":
+            self._apply_adaptive_config(coach_instance, config)
     
     def _apply_memory_strategy(self, coach: Any, config: Dict[str, Any]) -> None:
         """Apply memory retrieval strategy configuration"""
@@ -358,6 +361,31 @@ class NOf1Experimenter:
         
         logger.info(f"Interventions {'enabled' if coach.interventions_enabled else 'disabled'} "
                    f"(type: {coach.intervention_type}, cooldown: {cooldown_minutes} min)")
+    
+    def _apply_adaptive_config(self, coach: Any, config: Dict[str, Any]) -> None:
+        """Apply adaptive behavior configuration"""
+        # Enable or disable adaptive behavior
+        adaptive_enabled = config.get('adaptive_enabled', False)
+        
+        # Store configuration on coach
+        coach.adaptive_enabled = adaptive_enabled
+        coach.adapt_prompts = config.get('adapt_prompts', True) if adaptive_enabled else False
+        coach.adapt_settings = config.get('adapt_settings', True) if adaptive_enabled else False
+        
+        # Configure the adaptive managers if available
+        if hasattr(coach, 'state_monitor') and hasattr(coach, 'response_adapter'):
+            if not adaptive_enabled:
+                # Disable adaptations by clearing the monitor
+                coach.state_monitor = None
+                coach.response_adapter = None
+                logger.info("Adaptive behavior disabled for this session")
+            else:
+                # Ensure they're properly initialized
+                if coach.state_monitor is None:
+                    from gtd_coach.adaptive import UserStateMonitor, AdaptiveResponseManager
+                    coach.state_monitor = UserStateMonitor()
+                    coach.response_adapter = AdaptiveResponseManager()
+                logger.info("Adaptive behavior enabled with prompt and setting adaptation")
     
     def log_session_start(self) -> None:
         """Log the start of an experimental session"""
