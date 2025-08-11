@@ -2,6 +2,7 @@
 """
 ADHD-Specific Pattern Analysis from Evaluation Data
 Detects time blindness, task switching, and executive function patterns
+Enhanced with Timing app validation for pattern verification
 """
 
 import json
@@ -11,6 +12,15 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import numpy as np
 from collections import Counter
+
+# Import Timing integration
+try:
+    from gtd_coach.integrations.timing import TimingAPI
+    timing_available = True
+except ImportError:
+    timing_available = False
+    logger = logging.getLogger(__name__)
+    logger.info("Timing integration not available - pattern validation will use evaluation data only")
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +38,9 @@ class ADHDPatternAnalyzer:
         self.data_dir = data_dir or Path.home() / "gtd-coach" / "data"
         self.eval_dir = self.data_dir / "evaluations"
         self.patterns_cache = {}
+        
+        # Initialize Timing client if available
+        self.timing_client = TimingAPI() if timing_available else None
         
     def analyze_session(self, session_id: str) -> Dict[str, Any]:
         """
@@ -57,6 +70,9 @@ class ADHDPatternAnalyzer:
                 'executive_function': self._assess_executive_function(eval_data),
                 'fatigue_indicators': self._detect_fatigue_patterns(eval_data)
             }
+            
+            # Enrich with Timing validation if available
+            patterns = self.enrich_with_timing_patterns(patterns, session_id, eval_data)
             
             # Cache the patterns
             self.patterns_cache[session_id] = patterns
@@ -266,6 +282,183 @@ class ADHDPatternAnalyzer:
             return 'moderate'
         else:
             return 'high'
+    
+    def enrich_with_timing_patterns(self, patterns: Dict[str, Any], 
+                                   session_id: str, 
+                                   eval_data: Dict) -> Dict[str, Any]:
+        """
+        Enrich patterns with Timing app validation data
+        
+        This method adds objective time usage data to validate self-reported patterns.
+        The discrepancy between self-reported and actual time usage IS the pattern,
+        not an error to correct.
+        
+        Args:
+            patterns: Existing pattern analysis
+            session_id: Session identifier
+            eval_data: Evaluation data containing user inputs
+            
+        Returns:
+            Enriched patterns dictionary
+        """
+        if not self.timing_client or not self.timing_client.is_configured():
+            logger.debug("Timing client not configured - skipping enrichment")
+            return patterns
+        
+        try:
+            # Fetch last 7 days of Timing data with 3s timeout
+            timing_projects = self.timing_client.fetch_projects_last_week(min_minutes=30)
+            
+            if not timing_projects:
+                patterns['timing_validation'] = {
+                    'data_available': False,
+                    'reason': 'No significant projects in last 7 days'
+                }
+                return patterns
+            
+            # Extract mentioned projects from mindsweep
+            mentioned_items = self._extract_mentioned_items(eval_data)
+            
+            # Calculate discrepancy pattern
+            discrepancy_pattern = self._calculate_discrepancy_pattern(
+                mentioned_items, timing_projects
+            )
+            
+            # Calculate invisible work ratio
+            invisible_ratio = self._calculate_invisible_work_ratio(
+                mentioned_items, timing_projects
+            )
+            
+            # Add validation data to patterns
+            patterns['timing_validation'] = {
+                'data_available': True,
+                'discrepancy_pattern': discrepancy_pattern,
+                'invisible_work_ratio': invisible_ratio,
+                'project_count': len(timing_projects),
+                'mentioned_count': len(mentioned_items)
+            }
+            
+            # Update time blindness score based on validation
+            if discrepancy_pattern == 'time_blindness':
+                # Adjust time blindness severity if Timing confirms it
+                patterns['time_blindness']['validated'] = True
+                patterns['time_blindness']['severity'] = 'high'
+            
+        except Exception as e:
+            logger.warning(f"Failed to enrich with Timing data: {e}")
+            patterns['timing_validation'] = {
+                'data_available': False,
+                'reason': f'Error: {str(e)}'
+            }
+        
+        return patterns
+    
+    def _extract_mentioned_items(self, eval_data: Dict) -> List[str]:
+        """
+        Extract project/task mentions from user inputs during session
+        
+        Args:
+            eval_data: Evaluation data containing user inputs
+            
+        Returns:
+            List of mentioned project/task keywords
+        """
+        mentioned_items = []
+        evaluations = eval_data.get('evaluations', [])
+        
+        for eval_item in evaluations:
+            # Focus on MIND_SWEEP phase where users report what they worked on
+            if eval_item.get('phase') == 'MIND_SWEEP':
+                user_input = eval_item.get('user_input', '').lower()
+                
+                # Simple keyword extraction (could be enhanced with NLP)
+                # Look for project-like words (capitalized, quoted, or specific patterns)
+                words = user_input.split()
+                for word in words:
+                    # Skip common words
+                    if len(word) > 3 and word not in ['that', 'this', 'have', 'need', 'want', 'should']:
+                        mentioned_items.append(word.strip('.,!?'))
+        
+        return list(set(mentioned_items))  # Unique items only
+    
+    def _calculate_discrepancy_pattern(self, mentioned_items: List[str], 
+                                      timing_projects: List[Dict]) -> str:
+        """
+        Calculate the pattern of discrepancy between mentioned and actual work
+        
+        This is not about accuracy but about understanding the type of
+        executive function pattern present.
+        
+        Args:
+            mentioned_items: Items mentioned in review
+            timing_projects: Actual projects from Timing
+            
+        Returns:
+            Pattern classification
+        """
+        if not timing_projects:
+            return 'no_timing_data'
+        
+        # Get project names from Timing
+        actual_projects = [p['name'].lower() for p in timing_projects]
+        
+        # Calculate coverage - how many actual projects were mentioned
+        mentioned_actual = 0
+        for mentioned in mentioned_items:
+            # Fuzzy matching - if mentioned word appears in any actual project
+            if any(mentioned in proj for proj in actual_projects):
+                mentioned_actual += 1
+        
+        # Calculate coverage ratio
+        if len(actual_projects) > 0:
+            coverage_ratio = mentioned_actual / len(actual_projects)
+        else:
+            coverage_ratio = 0
+        
+        # Classify the pattern
+        if coverage_ratio > 0.7:
+            return 'high_awareness'  # Good self-awareness of time usage
+        elif coverage_ratio > 0.4:
+            return 'selective_awareness'  # Remembers important, forgets routine
+        else:
+            return 'time_blindness'  # Significant time blindness pattern
+    
+    def _calculate_invisible_work_ratio(self, mentioned_items: List[str], 
+                                       timing_projects: List[Dict]) -> float:
+        """
+        Calculate ratio of work time that goes "invisible" (unmentioned)
+        
+        This helps identify how much reactive/routine work isn't captured
+        in conscious awareness.
+        
+        Args:
+            mentioned_items: Items mentioned in review
+            timing_projects: Actual projects from Timing
+            
+        Returns:
+            Ratio of invisible work (0.0 to 1.0)
+        """
+        if not timing_projects:
+            return 0.0
+        
+        total_hours = sum(p.get('time_spent', 0) for p in timing_projects)
+        
+        if total_hours == 0:
+            return 0.0
+        
+        # Calculate hours for mentioned projects
+        mentioned_hours = 0
+        for project in timing_projects:
+            project_name = project['name'].lower()
+            # Check if this project was mentioned
+            if any(item in project_name for item in mentioned_items):
+                mentioned_hours += project.get('time_spent', 0)
+        
+        # Calculate invisible work ratio
+        invisible_hours = total_hours - mentioned_hours
+        invisible_ratio = invisible_hours / total_hours
+        
+        return round(invisible_ratio, 2)
     
     def aggregate_patterns(self, session_ids: List[str]) -> Dict[str, Any]:
         """
