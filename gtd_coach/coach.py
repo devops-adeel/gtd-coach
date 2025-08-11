@@ -104,6 +104,16 @@ class GTDCoach:
         self.pattern_detector = ADHDPatternDetector()
         self.current_phase = "STARTUP"
         
+        # Initialize North Star metrics tracking
+        from gtd_coach.metrics import NorthStarMetrics
+        self.north_star = NorthStarMetrics(self.session_id)
+        
+        # Initialize N-of-1 experiment framework
+        from gtd_coach.experiments import NOf1Experimenter
+        self.experimenter = NOf1Experimenter()
+        self.experimenter.apply_experiment_config(self)
+        self.experimenter.log_session_start()
+        
         # Initialize lightweight pattern detector for memory retrieval
         from pattern_detector import PatternDetector
         self.memory_patterns = PatternDetector()
@@ -493,6 +503,25 @@ class GTDCoach:
                             "review_timestamp": self.session_id
                         }
                         
+                        # Add North Star metrics
+                        north_star_metrics = self.north_star.get_all_metrics()
+                        metadata.update({
+                            "memory_relevance_score": north_star_metrics.get("memory_relevance_score", 0.0),
+                            "time_to_first_capture": north_star_metrics.get("time_to_first_capture"),
+                            "task_followthrough_rate": north_star_metrics.get("task_followthrough_rate", 0.0),
+                            "pre_capture_hesitation": north_star_metrics.get("pre_capture_hesitation", 0),
+                            "context_switches_per_minute": north_star_metrics.get("context_switches_per_minute", 0.0),
+                            "hyperfocus_periods": north_star_metrics.get("hyperfocus_periods", 0),
+                            "scatter_periods": north_star_metrics.get("scatter_periods", 0)
+                        })
+                        
+                        # Add experiment tracking (will be set by experiment framework)
+                        metadata.update({
+                            "experiment_week": self.user_id,  # ISO week format
+                            "experiment_variable": getattr(self, "current_experiment_variable", None),
+                            "experiment_value": getattr(self, "current_experiment_value", None)
+                        })
+                        
                         # Add Graphiti batch ID if available
                         if hasattr(self, 'current_graphiti_batch_id') and self.current_graphiti_batch_id:
                             metadata["graphiti_batch_id"] = self.current_graphiti_batch_id
@@ -794,6 +823,10 @@ class GTDCoach:
                 items.append(item.strip())
                 item_timestamps.append(time.time())
                 self.review_data["items_captured"] += 1
+                
+                # Track time to first capture for North Star metrics
+                if len(items) == 1:
+                    self.north_star.measure_time_to_insight(datetime.now())
                 
                 # Detect task switching pattern
                 if previous_item:
@@ -1199,6 +1232,9 @@ Items captured: {self.review_data['items_captured']}"""
             "messages": self.messages[1:]  # Exclude system prompt
         }
         validated_data = validate_session_data(session_data)
+        
+        # Save North Star metrics
+        self.north_star.save_metrics()
         
         with open(filepath, 'w') as f:
             json.dump(validated_data, f, indent=2)

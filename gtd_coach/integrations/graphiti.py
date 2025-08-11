@@ -671,6 +671,121 @@ class GraphitiMemory:
             logger.error(f"Search failed: {e}")
             return []
     
+    async def retrieve_and_score_memories(self, phase: str, query: Optional[str] = None, 
+                                         north_star_metrics: Optional[Any] = None) -> tuple:
+        """
+        Retrieve memories using experimental strategy and track relevance
+        
+        Args:
+            phase: Current GTD phase
+            query: Optional search query
+            north_star_metrics: North Star metrics instance for tracking
+            
+        Returns:
+            Tuple of (results, memory_ids) for relevance tracking
+        """
+        # Determine retrieval strategy from experiment config
+        strategy = getattr(self, 'retrieval_strategy', 'recency_weighted')
+        limit = getattr(self, 'retrieval_limit', 5)
+        
+        logger.info(f"Retrieving memories with strategy: {strategy}")
+        
+        results = []
+        memory_ids = []
+        
+        if strategy == "recency_weighted":
+            results = await self.search_recent_episodes(limit=limit)
+        elif strategy == "frequency_based":
+            results = await self.search_recurring_patterns(limit=limit)
+        elif strategy == "hybrid":
+            # Combine recency and frequency
+            recent = await self.search_recent_episodes(limit=limit//2)
+            patterns = await self.search_recurring_patterns(limit=limit//2)
+            results = recent + patterns
+        else:
+            # Default to context search
+            results = await self.search_with_context(query or f"{phase} tasks", num_results=limit)
+        
+        # Extract memory IDs for tracking
+        for result in results:
+            if hasattr(result, 'id'):
+                memory_ids.append(str(result.id))
+            elif isinstance(result, dict) and 'id' in result:
+                memory_ids.append(str(result['id']))
+        
+        # Track shown memories in North Star metrics if provided
+        if north_star_metrics and memory_ids:
+            for memory_id in memory_ids:
+                north_star_metrics.shown_memories.add(memory_id)
+        
+        logger.info(f"Retrieved {len(results)} memories for relevance tracking")
+        return results, memory_ids
+    
+    async def search_recent_episodes(self, limit: int = 5) -> List[Any]:
+        """
+        Search for most recent episodes
+        
+        Args:
+            limit: Maximum number of results
+            
+        Returns:
+            List of recent episodes
+        """
+        if not self.graphiti_client:
+            return []
+        
+        try:
+            # Search for recent episodes from this user
+            query = f"session {self.session_group_id} recent"
+            results = await self.search_with_context(query, num_results=limit)
+            
+            # Apply recency weighting if configured
+            weight_factor = getattr(self, 'recency_weight', 0.8)
+            # In a real implementation, you'd sort by timestamp with weighting
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to search recent episodes: {e}")
+            return []
+    
+    async def search_recurring_patterns(self, limit: int = 5) -> List[Any]:
+        """
+        Search for frequently recurring patterns
+        
+        Args:
+            limit: Maximum number of results
+            
+        Returns:
+            List of recurring patterns
+        """
+        if not self.graphiti_client:
+            return []
+        
+        try:
+            # Search for patterns that appear frequently
+            min_occurrences = getattr(self, 'frequency_threshold', 2)
+            query = f"recurring pattern frequency>{min_occurrences}"
+            results = await self.search_with_context(query, num_results=limit)
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to search recurring patterns: {e}")
+            return []
+    
+    def mark_memory_as_used(self, memory_id: str, north_star_metrics: Optional[Any] = None) -> None:
+        """
+        Mark a specific memory as having been used/referenced
+        
+        Args:
+            memory_id: ID of the memory that was used
+            north_star_metrics: North Star metrics instance for tracking
+        """
+        if north_star_metrics:
+            north_star_metrics.mark_memory_used(memory_id)
+            logger.debug(f"Marked memory {memory_id} as used")
+    
     async def create_session_summary(self, review_data: Dict[str, Any],
                                    timing_data: Optional[Dict[str, Any]] = None) -> None:
         """
