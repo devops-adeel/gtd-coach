@@ -1,0 +1,249 @@
+# N-of-1 Experiment Schedule for GTD Coach
+# Uses ABAB design for single-subject experimentation
+# Each week tests one variable with 4 conditions (ABAB pattern)
+
+experiment_design:
+  type: "n-of-1"
+  subject: "single_user"
+  design_pattern: "ABAB"  # Alternating baseline-treatment
+  sessions_per_condition: 2  # Minimum sessions per condition for stability
+  
+# Sequential experiments - one variable per week
+experiments:
+  - week: 1
+    name: "Memory Retrieval Strategy"
+    variable: "memory_retrieval_strategy"
+    description: "Test different approaches to retrieving and presenting past memories"
+    conditions:
+      - value: "recency"
+        description: "Show most recent memories first"
+        config:
+          strategy: "recency_weighted"
+          limit: 5
+          weight_factor: 0.8
+      - value: "frequency"
+        description: "Show most frequently recurring patterns"
+        config:
+          strategy: "frequency_based"
+          limit: 5
+          min_occurrences: 2
+      - value: "recency"  # ABAB repeat
+        description: "Show most recent memories first"
+        config:
+          strategy: "recency_weighted"
+          limit: 5
+          weight_factor: 0.8
+      - value: "frequency"  # ABAB repeat
+        description: "Show most frequently recurring patterns"
+        config:
+          strategy: "frequency_based"
+          limit: 5
+          min_occurrences: 2
+    metrics_focus:
+      - "memory_relevance_score"
+      - "time_to_first_capture"
+  
+  - week: 2
+    name: "Temperature Profile"
+    variable: "temperature_profile"
+    description: "Test different LLM temperature settings per phase"
+    conditions:
+      - value: "low"
+        description: "Low temperature for consistency"
+        config:
+          STARTUP: 0.5
+          MIND_SWEEP: 0.4
+          PROJECT_REVIEW: 0.5
+          PRIORITIZATION: 0.3
+          WRAP_UP: 0.6
+      - value: "adaptive"
+        description: "Adaptive temperature based on user responses"
+        config:
+          STARTUP: 0.7
+          MIND_SWEEP: "adaptive"  # Adjusts based on response patterns
+          PROJECT_REVIEW: 0.7
+          PRIORITIZATION: 0.5
+          WRAP_UP: 0.8
+      - value: "low"  # ABAB repeat
+        description: "Low temperature for consistency"
+        config:
+          STARTUP: 0.5
+          MIND_SWEEP: 0.4
+          PROJECT_REVIEW: 0.5
+          PRIORITIZATION: 0.3
+          WRAP_UP: 0.6
+      - value: "adaptive"  # ABAB repeat
+        description: "Adaptive temperature based on user responses"
+        config:
+          STARTUP: 0.7
+          MIND_SWEEP: "adaptive"
+          PROJECT_REVIEW: 0.7
+          PRIORITIZATION: 0.5
+          WRAP_UP: 0.8
+    metrics_focus:
+      - "time_to_first_capture"
+      - "context_switches_per_minute"
+  
+  - week: 3
+    name: "Coaching Style"
+    variable: "coaching_style"
+    description: "Test different coaching interaction styles"
+    conditions:
+      - value: "directive"
+        description: "Direct, time-focused, structured guidance"
+        config:
+          prompt_style: "directive"
+          time_reminders: "frequent"
+          structure_emphasis: "high"
+      - value: "socratic"
+        description: "Question-based, reflective approach"
+        config:
+          prompt_style: "socratic"
+          time_reminders: "minimal"
+          structure_emphasis: "medium"
+      - value: "directive"  # ABAB repeat
+        description: "Direct, time-focused, structured guidance"
+        config:
+          prompt_style: "directive"
+          time_reminders: "frequent"
+          structure_emphasis: "high"
+      - value: "socratic"  # ABAB repeat
+        description: "Question-based, reflective approach"
+        config:
+          prompt_style: "socratic"
+          time_reminders: "minimal"
+          structure_emphasis: "medium"
+    metrics_focus:
+      - "task_followthrough_rate"
+      - "time_to_first_capture"
+  
+  - week: 4
+    name: "Prompt Length"
+    variable: "prompt_length"
+    description: "Test concise vs detailed instructions"
+    conditions:
+      - value: "concise"
+        description: "Brief, bullet-point style prompts"
+        config:
+          max_tokens: 200
+          style: "bullets"
+          detail_level: "minimal"
+      - value: "detailed"
+        description: "Comprehensive, contextual prompts"
+        config:
+          max_tokens: 500
+          style: "narrative"
+          detail_level: "comprehensive"
+      - value: "concise"  # ABAB repeat
+        description: "Brief, bullet-point style prompts"
+        config:
+          max_tokens: 200
+          style: "bullets"
+          detail_level: "minimal"
+      - value: "detailed"  # ABAB repeat
+        description: "Comprehensive, contextual prompts"
+        config:
+          max_tokens: 500
+          style: "narrative"
+          detail_level: "comprehensive"
+    metrics_focus:
+      - "time_to_first_capture"
+      - "pre_capture_hesitation"
+  
+  - week: 5
+    name: "ADHD Language Patterns"
+    variable: "adhd_language_pattern"
+    description: "Test time pressure vs encouragement messaging"
+    conditions:
+      - value: "pressure"
+        description: "Emphasize time limits and urgency"
+        config:
+          time_emphasis: "high"
+          urgency_level: "strong"
+          celebration_style: "achievement"
+      - value: "encouragement"
+        description: "Focus on support and progress"
+        config:
+          time_emphasis: "gentle"
+          urgency_level: "minimal"
+          celebration_style: "effort"
+      - value: "pressure"  # ABAB repeat
+        description: "Emphasize time limits and urgency"
+        config:
+          time_emphasis: "high"
+          urgency_level: "strong"
+          celebration_style: "achievement"
+      - value: "encouragement"  # ABAB repeat
+        description: "Focus on support and progress"
+        config:
+          time_emphasis: "gentle"
+          urgency_level: "minimal"
+          celebration_style: "effort"
+    metrics_focus:
+      - "task_followthrough_rate"
+      - "scatter_periods"
+      - "hyperfocus_periods"
+  
+  - week: 6
+    name: "Prompt Structure"
+    variable: "prompt_structure"
+    description: "Test bullet points vs narrative structure"
+    conditions:
+      - value: "bullets"
+        description: "Structured bullet point format"
+        config:
+          format: "bullets"
+          hierarchy: "numbered"
+          visual_breaks: true
+      - value: "narrative"
+        description: "Flowing narrative format"
+        config:
+          format: "narrative"
+          hierarchy: "implicit"
+          visual_breaks: false
+      - value: "bullets"  # ABAB repeat
+        description: "Structured bullet point format"
+        config:
+          format: "bullets"
+          hierarchy: "numbered"
+          visual_breaks: true
+      - value: "narrative"  # ABAB repeat
+        description: "Flowing narrative format"
+        config:
+          format: "narrative"
+          hierarchy: "implicit"
+          visual_breaks: false
+    metrics_focus:
+      - "time_to_first_capture"
+      - "context_switches_per_minute"
+
+# Analysis configuration
+analysis:
+  min_sessions_for_analysis: 4  # Minimum sessions needed for ABAB analysis
+  significance_threshold: 0.2  # 20% change considered significant for n=1
+  order_effect_check: true  # Check if AB differs from BA
+  
+# Override mechanism
+override:
+  enabled: true
+  environment_variables:
+    - "EXPERIMENT_OVERRIDE_MEMORY"  # Override memory strategy
+    - "EXPERIMENT_OVERRIDE_TEMPERATURE"  # Override temperature
+    - "EXPERIMENT_OVERRIDE_STYLE"  # Override coaching style
+    - "EXPERIMENT_OVERRIDE_LENGTH"  # Override prompt length
+    - "EXPERIMENT_OVERRIDE_STRUCTURE"  # Override structure
+    - "EXPERIMENT_OVERRIDE_ADHD"  # Override ADHD pattern
+  
+# Success criteria for each North Star metric
+success_criteria:
+  memory_relevance_score:
+    target: 0.8  # 80% of retrieved memories should be useful
+    improvement_threshold: 0.1  # 10% improvement is meaningful
+  
+  time_to_first_capture:
+    target: 30  # Capture within 30 seconds
+    improvement_threshold: -10  # 10 second reduction is meaningful
+  
+  task_followthrough_rate:
+    target: 0.6  # 60% task completion
+    improvement_threshold: 0.15  # 15% improvement is meaningful
