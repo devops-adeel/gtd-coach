@@ -1,0 +1,62 @@
+# Pre-commit hooks for GTD Coach
+# Prevents accidental commits of secrets and sensitive data
+
+repos:
+  # Detect secrets in code
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: .*\.(lock|example)$
+
+  # Gitleaks for comprehensive secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks
+
+  # Standard Python hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-case-conflict
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+
+  # Python-specific checks
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.11
+
+  # Security checks for Python
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ['-ll', '--skip', 'B101,B601']
+        exclude: tests/
+
+# Custom local hooks
+  - repo: local
+    hooks:
+      - id: check-env-files
+        name: Check for .env files
+        entry: sh -c 'git diff --cached --name-only | grep -E "\.env" | grep -v "\.example" && echo "ERROR - .env file detected!" && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
+      
+      - id: check-api-keys
+        name: Check for API keys
+        entry: sh -c 'git diff --cached --name-only -z | xargs -0 grep -l "eyJ0eXAiOiJKV1QiLCJhbGc" 2>/dev/null && echo "ERROR - Hardcoded API key detected!" && exit 1 || exit 0'
+        language: system
+        pass_filenames: false

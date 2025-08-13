@@ -78,3 +78,6 @@ data/.migration_state.json
 
 # Documentation builds
 docs/_build/
+
+# Claude local settings (may contain API keys)
+.claude/
