@@ -1,0 +1,92 @@
+codecov:
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+  
+  status:
+    project:
+      default:
+        target: 85%
+        threshold: 2%
+        if_ci_failed: error
+        informational: false
+        only_pulls: false
+      
+      critical:
+        target: 95%
+        threshold: 1%
+        paths:
+          - "gtd_coach/agent/workflows/"
+          - "gtd_coach/agent/tools/"
+        if_ci_failed: error
+        informational: false
+      
+      agent:
+        target: 90%
+        threshold: 2%
+        paths:
+          - "gtd_coach/agent/"
+        if_ci_failed: error
+        informational: false
+    
+    patch:
+      default:
+        target: 85%
+        threshold: 5%
+        if_ci_failed: error
+        informational: false
+        only_pulls: true
+
+parsers:
+  gcov:
+    branch_detection:
+      conditional: true
+      loop: true
+      method: false
+      macro: false
+
+comment:
+  layout: "reach,diff,flags,tree,betaprofiling"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+  branches:
+    - main
+    - develop
+
+ignore:
+  - "**/__pycache__"
+  - "**/test_*.py"
+  - "tests/"
+  - "docs/"
+  - "scripts/"
+  - "examples/"
+  - ".github/"
+  - "*.md"
+  - "setup.py"
+  - "conftest.py"
+
+flags:
+  unittests:
+    paths:
+      - "gtd_coach/"
+    carryforward: false
+  
+  integration:
+    paths:
+      - "gtd_coach/"
+    carryforward: true
+  
+  agent:
+    paths:
+      - "gtd_coach/agent/"
+    carryforward: true
+
+github_checks:
+  annotations: true

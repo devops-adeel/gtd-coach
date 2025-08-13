@@ -25,6 +25,7 @@ venv/
 ENV/
 env/
 .venv
+test_venv/
 
 # Testing
 .coverage
@@ -51,6 +52,7 @@ summaries/weekly_summary_*.md
 # Test outputs
 test_output.log
 *.log
+validation_results.json
 
 # Environment and configuration
 .env

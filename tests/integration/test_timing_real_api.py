@@ -331,11 +331,12 @@ def run_real_api_tests():
 
 
 if __name__ == "__main__":
-    # Set the API key if provided
+    # Check for API key in environment
     if not os.getenv('TIMING_API_KEY'):
-        # Use the provided API key for testing
-        api_key = "***REMOVED***"
-        os.environ['TIMING_API_KEY'] = api_key
+        print("⚠️ TIMING_API_KEY not found in environment")
+        print("Please set TIMING_API_KEY environment variable to run this test")
+        print("Get your API key from: https://web.timingapp.com")
+        exit(1)
     
     success = run_real_api_tests()
     exit(0 if success else 1)

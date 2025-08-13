@@ -134,6 +134,23 @@ class GTDCoach:
         self.experimenter.apply_experiment_config(self)
         self.experimenter.log_session_start()
         
+        # Check if should use agent workflow
+        from gtd_coach.config.features import should_use_agent, should_run_shadow
+        self.use_agent = should_use_agent(self.session_id)
+        self.run_shadow = should_run_shadow(self.session_id)
+        
+        # Initialize agent workflow if needed
+        self.agent_workflow = None
+        if self.use_agent or self.run_shadow:
+            try:
+                from gtd_coach.agent.workflows.weekly_review import WeeklyReviewWorkflow
+                self.agent_workflow = WeeklyReviewWorkflow()
+                self.logger.info(f"Agent workflow initialized (use_agent={self.use_agent}, shadow={self.run_shadow})")
+            except ImportError as e:
+                self.logger.warning(f"Failed to import agent workflow: {e}")
+                self.use_agent = False
+                self.run_shadow = False
+        
         # Initialize lightweight pattern detector for memory retrieval
         try:
             from pattern_detector import PatternDetector
@@ -1447,6 +1464,220 @@ Items captured: {self.review_data['items_captured']}"""
         self.logger.info(f"Saved complete review log to {filepath.name}")
         self.logger.info(f"Session summary: {self.review_data}")
 
+    def run_legacy_review(self):
+        """Run the traditional phase-based GTD review"""
+        self.logger.info("Running legacy GTD review workflow")
+        
+        # Execute all 5 phases in sequence
+        self.run_startup_phase()
+        self.run_mindsweep_phase()
+        self.run_project_review_phase()
+        self.run_prioritization_phase()
+        self.run_wrapup_phase()
+        
+        # Log experiment results if applicable
+        if hasattr(self, 'experimenter'):
+            self.experimenter.log_session_complete(self.review_data)
+        
+        self.logger.info("Legacy review completed successfully")
+
+    def run_agent_review(self):
+        """Run the agent-based GTD review workflow"""
+        self.logger.info("Running agent-based GTD review workflow")
+        
+        if not self.agent_workflow:
+            self.logger.error("Agent workflow not initialized, falling back to legacy")
+            self.run_legacy_review()
+            return
+        
+        try:
+            # Prepare initial state for the workflow
+            initial_state = {
+                'user_id': self.user_id,
+                'session_id': self.session_id,
+                'messages': [],
+                'captures': [],
+                'processed_items': [],
+                'adhd_patterns': [],
+                'interventions': [],
+                'completed_phases': [],
+                'weekly_priorities': [],
+                'test_mode': False
+            }
+            
+            # Handle interrupt/resume workflow
+            print("\n🤖 Starting Agent-Powered GTD Review")
+            print("="*50)
+            print("This review uses an intelligent agent to guide you through the process.")
+            print("The agent will pause at key points for your input.\n")
+            
+            # Run the workflow
+            config = {
+                "configurable": {
+                    "thread_id": self.session_id,
+                    "checkpoint_ns": "weekly_review"
+                }
+            }
+            
+            # Start the workflow - this will pause at interrupts
+            current_state = initial_state
+            resume_count = 0
+            max_resumes = 20  # Safety limit
+            
+            while resume_count < max_resumes:
+                try:
+                    # Run or resume the workflow
+                    if resume_count == 0:
+                        # Initial run
+                        result = self.agent_workflow.graph.invoke(current_state, config)
+                    else:
+                        # Resume from interrupt with user input
+                        from langgraph.types import Command
+                        result = self.agent_workflow.graph.invoke(
+                            Command(resume=user_response),
+                            config
+                        )
+                    
+                    # Check if workflow completed or hit an interrupt
+                    if '__interrupt__' in result:
+                        # Extract interrupt data
+                        interrupt_data = result['__interrupt__'][0]['value']
+                        phase = interrupt_data.get('phase', 'unknown')
+                        prompt = interrupt_data.get('prompt', 'Please provide input:')
+                        input_type = interrupt_data.get('type', 'text')
+                        
+                        # Handle different interrupt types
+                        if input_type == 'confirmation':
+                            user_input = input(f"\n{prompt} ")
+                            user_response = {'ready': user_input.lower() in ['yes', 'y', '']}
+                            
+                        elif input_type == 'text_list':
+                            print(f"\n{prompt}")
+                            items = []
+                            print("(Enter items one per line, press Enter twice to finish)")
+                            while True:
+                                item = input("> ")
+                                if not item:
+                                    break
+                                items.append(item)
+                            user_response = {'items': items}
+                            
+                        elif input_type == 'project_updates':
+                            print(f"\n{prompt}")
+                            existing = interrupt_data.get('existing_projects', [])
+                            if existing:
+                                print("\nExisting projects:")
+                                for p in existing:
+                                    print(f"  - {p.get('title', 'Unnamed')}")
+                            
+                            updates = []
+                            print("\nReview projects (press Enter to skip):")
+                            for i in range(3):  # Limit to 3 for now
+                                title = input(f"Project {i+1} title: ")
+                                if not title:
+                                    break
+                                outcome = input("  Desired outcome: ")
+                                next_action = input("  Next action: ")
+                                updates.append({
+                                    'title': title,
+                                    'outcome': outcome,
+                                    'next_action': next_action,
+                                    'create_new': True
+                                })
+                            user_response = {'updates': updates}
+                            
+                        elif input_type == 'priority_selection':
+                            print(f"\n{prompt}")
+                            suggestions = interrupt_data.get('suggestions', [])
+                            if suggestions:
+                                print("\nSuggested priorities:")
+                                for i, s in enumerate(suggestions, 1):
+                                    print(f"  {i}. {s}")
+                            
+                            priorities = []
+                            for i in range(3):
+                                priority = input(f"Priority {i+1}: ")
+                                if not priority:
+                                    break
+                                priorities.append(priority)
+                            user_response = {'priorities': priorities}
+                            
+                        elif input_type == 'acknowledgment':
+                            user_input = input(f"\n{prompt}\nPress Enter to continue: ")
+                            user_response = {'acknowledged': True}
+                            
+                        else:
+                            # Default text input
+                            user_input = input(f"\n{prompt} ")
+                            user_response = {'response': user_input}
+                        
+                        resume_count += 1
+                        
+                    else:
+                        # Workflow completed
+                        if result.get('current_phase') == 'COMPLETE':
+                            print("\n✅ Agent workflow completed successfully!")
+                            
+                            # Update review data from agent result
+                            self.review_data['items_captured'] = len(result.get('captures', []))
+                            self.review_data['projects_reviewed'] = len(result.get('processed_items', []))
+                            self.review_data['completed_phases'] = result.get('completed_phases', [])
+                            
+                            # Store priorities
+                            self.priorities = [
+                                {'action': p, 'priority': 'A'} 
+                                for p in result.get('weekly_priorities', [])
+                            ]
+                            
+                            # Store mindsweep items
+                            self.mindsweep_items = [
+                                c.get('content', '') 
+                                for c in result.get('captures', [])
+                            ]
+                            
+                            break
+                        else:
+                            # Unexpected end
+                            self.logger.warning("Workflow ended without completion")
+                            break
+                            
+                except Exception as e:
+                    self.logger.error(f"Error during agent workflow execution: {e}")
+                    print(f"\n❌ Error in workflow: {e}")
+                    print("Saving progress and exiting...")
+                    break
+            
+            if resume_count >= max_resumes:
+                self.logger.warning("Max resume count reached, ending workflow")
+                print("\n⚠️ Maximum interactions reached, completing review...")
+            
+            # Save the review data
+            self.save_review_log()
+            
+            # Log experiment results if applicable
+            if hasattr(self, 'experimenter'):
+                self.experimenter.log_session_complete(self.review_data)
+            
+            self.logger.info("Agent review completed")
+            
+        except Exception as e:
+            self.logger.error(f"Agent workflow failed: {e}")
+            print(f"\n❌ Agent workflow error: {e}")
+            print("Falling back to legacy workflow...")
+            
+            # Reset and run legacy workflow
+            self.review_data = {
+                "projects_reviewed": 0,
+                "decisions_made": 0,
+                "items_captured": 0,
+                "phase_durations": {},
+                "interventions_offered": 0,
+                "interventions_accepted": 0,
+                "interventions_skipped": 0,
+                "state_adaptations": []
+            }
+            self.run_legacy_review()
+
 # Data validation functions
 def validate_mindsweep_items(items):
     """Validate and clean mindsweep items"""
@@ -1541,12 +1772,12 @@ def main():
     coach = GTDCoach()
     
     try:
-        coach.run_startup_phase()
-        coach.run_mindsweep_phase()
-        coach.run_project_review_phase()
-        coach.run_prioritization_phase()
-        coach.run_wrapup_phase()
-        
+        # Route to appropriate workflow based on feature flags
+        if coach.use_agent:
+            coach.run_agent_review()
+        else:
+            coach.run_legacy_review()
+            
         # Trigger post-session evaluation (fire-and-forget)
         if coach.evaluator and coach.interaction_history:
             print("\n📊 Queueing session evaluation...")

@@ -31,7 +31,7 @@ dependencies = [
     "python-dotenv==1.1.1",
     "graphiti-core[openai]==0.18.5",
     "neo4j==5.28.2",
-    "langfuse[openai]==3.2.3"
+    "langfuse[openai]==3.2.4"
 ]
 
 [project.optional-dependencies]
@@ -49,10 +49,6 @@ gtd-coach = "gtd_coach.__main__:main"
 Homepage = "https://github.com/yourusername/gtd-coach"
 Repository = "https://github.com/yourusername/gtd-coach.git"
 Issues = "https://github.com/yourusername/gtd-coach/issues"
-
-[tool.setuptools]
-packages = ["gtd_coach"]
-include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]

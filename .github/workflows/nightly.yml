@@ -1,0 +1,297 @@
+name: Nightly CI
+
+on:
+  schedule:
+    # Run at 2 AM UTC every day
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      run_full_suite:
+        description: 'Run full test suite'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  full-test-suite:
+    name: Full Test Suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: Run full test suite
+        run: |
+          pytest tests/ -v --cov=gtd_coach --cov-report=xml --cov-report=html
+        timeout-minutes: 30
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: nightly-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: nightly-coverage
+
+  integration-test-external-services:
+    name: Integration Test External Services
+    runs-on: ubuntu-latest
+    
+    services:
+      neo4j:
+        image: neo4j:5-enterprise
+        env:
+          NEO4J_AUTH: neo4j/password123
+          NEO4J_ACCEPT_LICENSE_AGREEMENT: yes
+          NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+        ports:
+          - 7474:7474
+          - 7687:7687
+      
+      lm-studio-mock:
+        image: mockserver/mockserver:latest
+        ports:
+          - 1234:1080
+        env:
+          MOCKSERVER_INITIALIZATION_JSON_PATH: /config/lm-studio-mock.json
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+      
+      - name: Wait for services
+        run: |
+          timeout 60 bash -c 'until nc -z localhost 7687; do sleep 1; done'
+          timeout 60 bash -c 'until nc -z localhost 1234; do sleep 1; done'
+      
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v -k "external" --tb=short
+        env:
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: password123
+          LM_STUDIO_URL: http://localhost:1234
+
+  memory-leak-detection:
+    name: Memory Leak Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install memory_profiler tracemalloc-ng pytest-memray
+      
+      - name: Run memory leak tests
+        run: |
+          python -m pytest tests/agent/ -v --memray --memray-bin-path=.memray
+        continue-on-error: true
+      
+      - name: Analyze memory usage
+        run: |
+          python scripts/analyze_memory.py .memray/*.bin
+        continue-on-error: true
+
+  performance-regression:
+    name: Performance Regression Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest-benchmark
+      
+      - name: Run performance benchmarks
+        run: |
+          pytest tests/benchmarks/ -v \
+            --benchmark-only \
+            --benchmark-json=nightly-benchmark.json \
+            --benchmark-autosave \
+            --benchmark-compare \
+            --benchmark-compare-fail=mean:10%
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: nightly-benchmarks
+          path: .benchmarks/
+
+  dependency-updates:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Check for updates
+        run: |
+          pip install pip-audit safety pip-review
+          
+          echo "## Security Audit"
+          pip-audit --desc || true
+          
+          echo "## Safety Check"
+          safety check --json || true
+          
+          echo "## Available Updates"
+          pip-review --local --auto || true
+
+  agent-behavior-validation:
+    name: Agent Behavior Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install langsmith
+      
+      - name: Run behavior validation tests
+        run: |
+          python scripts/validate_agent_behavior.py \
+            --dataset "GTD Coach Evaluation" \
+            --experiments 10 \
+            --report nightly-behavior-report.json
+        continue-on-error: true
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+      
+      - name: Upload behavior report
+        uses: actions/upload-artifact@v3
+        with:
+          name: behavior-validation-report
+          path: nightly-behavior-report.json
+
+  cleanup:
+    name: Cleanup Old Artifacts
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Delete old artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const daysToKeep = 7;
+            const msPerDay = 24 * 60 * 60 * 1000;
+            const cutoffDate = new Date(Date.now() - (daysToKeep * msPerDay));
+            
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            const oldArtifacts = artifacts.data.artifacts.filter(artifact => {
+              return new Date(artifact.created_at) < cutoffDate;
+            });
+            
+            for (const artifact of oldArtifacts) {
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id
+              });
+              console.log(`Deleted artifact: ${artifact.name}`);
+            }
+
+  notify:
+    name: Send Nightly Report
+    needs: [full-test-suite, integration-test-external-services, memory-leak-detection, performance-regression, agent-behavior-validation]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Generate report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jobs = [
+              { name: 'Full Test Suite', status: '${{ needs.full-test-suite.result }}' },
+              { name: 'Integration Tests', status: '${{ needs.integration-test-external-services.result }}' },
+              { name: 'Memory Leak Detection', status: '${{ needs.memory-leak-detection.result }}' },
+              { name: 'Performance Regression', status: '${{ needs.performance-regression.result }}' },
+              { name: 'Agent Behavior', status: '${{ needs.agent-behavior-validation.result }}' }
+            ];
+            
+            const failed = jobs.filter(j => j.status === 'failure');
+            const passed = jobs.filter(j => j.status === 'success');
+            
+            let status = '✅';
+            if (failed.length > 0) status = '❌';
+            else if (passed.length < jobs.length) status = '⚠️';
+            
+            const report = `
+            ## ${status} Nightly CI Report - ${new Date().toDateString()}
+            
+            ### Summary
+            - **Passed**: ${passed.length}/${jobs.length}
+            - **Failed**: ${failed.length}/${jobs.length}
+            
+            ### Job Results
+            ${jobs.map(j => `- ${j.status === 'success' ? '✅' : '❌'} ${j.name}`).join('\n')}
+            
+            ${failed.length > 0 ? '### Failed Jobs\n' + failed.map(j => `- ${j.name}`).join('\n') : ''}
+            `;
+            
+            // Create issue if failures exist
+            if (failed.length > 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Nightly CI Failures - ${new Date().toDateString()}`,
+                body: report,
+                labels: ['nightly-ci', 'automated']
+              });
+            }

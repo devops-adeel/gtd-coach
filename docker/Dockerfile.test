@@ -1,0 +1,40 @@
+# Dockerfile for running GTD Coach tests
+FROM python:3.11-slim-bookworm
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies (no virtual env needed in container)
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir \
+    pytest-xdist \
+    pytest-json-report \
+    pytest-cov \
+    pytest-timeout
+
+# Copy the entire project
+COPY . .
+
+# Set environment variables for testing
+ENV PYTHONPATH=/app
+ENV TEST_MODE=true
+ENV MOCK_EXTERNAL_APIS=true
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Create test results directory
+RUN mkdir -p /app/test-results
+
+# Default command runs all tests
+CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short", "--junit-xml=/app/test-results/junit.xml"]

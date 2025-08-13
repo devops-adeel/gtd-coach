@@ -1,0 +1,75 @@
+{
+  "timestamp": "2025-08-11T19:47:32.112609",
+  "phase_timings": {
+    "STARTUP": {
+      "duration_seconds": 0.505,
+      "target_seconds": 120,
+      "within_target": true,
+      "memory_delta_mb": "not_measured"
+    },
+    "MIND_SWEEP": {
+      "duration_seconds": 0.503,
+      "target_seconds": 600,
+      "within_target": true,
+      "memory_delta_mb": "not_measured"
+    },
+    "PROJECT_REVIEW": {
+      "duration_seconds": 0.505,
+      "target_seconds": 720,
+      "within_target": true,
+      "memory_delta_mb": "not_measured"
+    },
+    "PRIORITIZATION": {
+      "duration_seconds": 0.502,
+      "target_seconds": 300,
+      "within_target": true,
+      "memory_delta_mb": "not_measured"
+    },
+    "WRAP_UP": {
+      "duration_seconds": 0.503,
+      "target_seconds": 180,
+      "within_target": true,
+      "memory_delta_mb": "not_measured"
+    }
+  },
+  "memory_usage": {},
+  "api_response_times": {
+    "lm_studio": {
+      "latency_ms": 49.0,
+      "status": "available"
+    },
+    "timing_api": {
+      "latency_ms": 250,
+      "status": "configured"
+    },
+    "graphiti": {
+      "latency_ms": 50,
+      "status": "configured"
+    },
+    "langfuse": {
+      "latency_ms": 100,
+      "status": "configured"
+    }
+  },
+  "error_rates": {},
+  "system_info": {
+    "python_version": "3.13.5 (main, Jun 11 2025, 15:36:57) [Clang 17.0.0 (clang-1700.0.13.3)]",
+    "platform": "darwin",
+    "platform_detail": "macOS-15.5-arm64-arm-64bit-Mach-O",
+    "cpu_count": 12,
+    "memory_total_gb": "unknown (psutil not installed)"
+  },
+  "adhd_compliance": {
+    "total_target_seconds": 1920,
+    "total_actual_seconds": 2.518,
+    "within_30_minutes": true,
+    "phases_within_limit": 5,
+    "total_phases": 5
+  },
+  "estimated_costs": {
+    "graphiti_per_session": 0.01,
+    "timing_api": 0.0,
+    "lm_studio": 0.0,
+    "total_per_session": 0.01
+  }
+}

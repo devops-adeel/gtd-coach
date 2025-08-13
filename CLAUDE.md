@@ -23,28 +23,28 @@ Due to Python environment management, all Python scripts should be run through D
 
 ```bash
 # Run weekly review in Docker
-./docker-run.sh
+./scripts/deployment/docker-run.sh
 
 # Test Timing app integration (NEW - ENHANCED)
-./docker-run.sh timing
+./scripts/deployment/docker-run.sh timing
 
 # Test full Timing + Graphiti integration
 docker compose run gtd-coach python3 test_timing_graphiti_integration.py
 
 # Test Langfuse integration
-./docker-run.sh test
+./scripts/deployment/docker-run.sh test
 
 # Test prompt-to-trace linking (NEW)
-./docker-run.sh test-trace-linking
+./scripts/deployment/docker-run.sh test-trace-linking
 
 # Generate weekly summary (NOW WITH TIMING INSIGHTS)
-./docker-run.sh summary
+./scripts/deployment/docker-run.sh summary
 
 # Build/rebuild Docker image (required after dependency changes)
-./docker-run.sh build
+./scripts/deployment/docker-run.sh build
 
 # Open shell in container for debugging
-./docker-run.sh shell
+./scripts/deployment/docker-run.sh shell
 
 # Using docker-compose directly
 docker compose up gtd-coach            # Run review
@@ -171,7 +171,9 @@ Episodes follow this structure:
 }
 ```
 
-## Langfuse Integration Details
+## Langfuse Integration Details (v3 SDK)
+
+**Note: Updated to Langfuse SDK v3.2.4 (August 2025) for compatibility with Langfuse server v3.97.1**
 
 ### What Gets Tracked
 - **Response Latency**: Per-phase timing for each LLM interaction
@@ -183,47 +185,70 @@ Episodes follow this structure:
 - **Prompt Versions**: Which prompt variant was used (firm/gentle)
 - **A/B Test Results**: Performance metrics by coaching tone
 
-### Implementation Approach
-The integration uses Langfuse's OpenAI SDK wrapper for automatic trace linking:
+### Implementation Approach (v3 SDK)
+The integration uses Langfuse's v3 OpenAI SDK wrapper built on OpenTelemetry:
 1. **OpenAI Client**: Uses `from langfuse.openai import OpenAI` with LM Studio endpoint
-2. **Prompt Linking**: Passes `langfuse_prompt` parameter to link prompts to traces
-3. **Metadata Enrichment**: Includes session ID, user ID, tags, and custom metrics
-4. **Graceful Degradation**: Falls back to standard OpenAI SDK or HTTP requests
-5. **Phase Metrics**: Captures items captured, priorities set, focus scores
+2. **OpenTelemetry Foundation**: Automatic context propagation and span management
+3. **Async Scoring**: Score API returns ID only, processes asynchronously in backend
+4. **Prompt Linking**: Passes `langfuse_prompt` parameter to link prompts to traces
+5. **Metadata Enrichment**: Includes session ID, user ID, tags, and custom metrics
+6. **Graceful Degradation**: Falls back to standard OpenAI SDK or HTTP requests
+7. **Phase Metrics**: Captures items captured, priorities set, focus scores
 
-#### Key Implementation
+#### Key Implementation (v3)
 ```python
-# Initialize with Langfuse wrapper
-from langfuse.openai import OpenAI
+# Initialize with Langfuse v3 wrapper (OpenTelemetry-based)
+from langfuse.openai import OpenAI  # v3.2.4+
+from langfuse import observe, get_client
+
 client = OpenAI(
     base_url="http://localhost:1234/v1",
     api_key="lm-studio"
 )
 
-# Make LLM call with trace linking
-completion = client.chat.completions.create(
-    model="meta-llama-3.1-8b-instruct",
-    messages=messages,
-    langfuse_prompt=prompt,  # Links prompt to trace
-    metadata={
-        "langfuse_session_id": session_id,
-        "langfuse_user_id": user_id,
-        "langfuse_tags": ["variant:firm", "gtd-review"],
-        # Custom metadata
-        "phase_metrics": {...}
-    }
-)
+# Use @observe decorator for automatic tracing
+@observe(name="gtd_phase")
+def run_phase():
+    # Make LLM call with trace linking
+    completion = client.chat.completions.create(
+        model="meta-llama-3.1-8b-instruct",
+        messages=messages,
+        langfuse_prompt=prompt,  # Links prompt to trace
+        metadata={
+            "langfuse_session_id": session_id,
+            "langfuse_user_id": user_id,
+            "langfuse_tags": ["variant:firm", "gtd-review"],
+            "phase_metrics": {...}
+        }
+    )
+    
+    # v3 scoring returns ID only (async processing)
+    langfuse = get_client()
+    score_id = langfuse.score(
+        name="quality",
+        value=1.0,
+        comment="Phase completed"
+    )
+    # score_id is returned immediately, processing happens async
 ```
 
-### Configuration
-Configure Langfuse by copying the example file and adding your keys:
+### Configuration (v3)
+Configure Langfuse v3 by setting environment variables or updating the integration file:
 ```bash
-cp langfuse_tracker.py.example langfuse_tracker.py
-# Edit langfuse_tracker.py with your instance details:
-# - LANGFUSE_HOST = "http://localhost:3000"
-# - LANGFUSE_PUBLIC_KEY = "pk-lf-..."  # Your public key
-# - LANGFUSE_SECRET_KEY = "sk-lf-..."  # Your secret key
+# Set environment variables (recommended)
+export LANGFUSE_HOST="http://localhost:3000"  # Your v3.97.1 server
+export LANGFUSE_PUBLIC_KEY="pk-lf-..."  # Your public key
+export LANGFUSE_SECRET_KEY="sk-lf-..."  # Your secret key
+
+# Or update gtd_coach/integrations/langfuse.py directly
 ```
+
+### v3 SDK Key Changes
+- **OpenTelemetry Foundation**: Built on OTEL for standardized tracing
+- **Async Scoring**: `score()` returns `{"id": "score_id"}` only
+- **Required Parameters**: `name` is now required for spans/generations
+- **Context Management**: Automatic propagation via OpenTelemetry
+- **Observation Lifecycle**: Explicit `.end()` calls needed when not using context managers
 
 ## Prompt Management System with Trace Linking (ENHANCED - December 2025)
 
@@ -288,7 +313,7 @@ Run the test suite to verify prompt management and trace linking:
 python3 test_prompt_management.py
 
 # E2E tests in Docker
-./docker-run.sh test-trace-linking
+./scripts/deployment/docker-run.sh test-trace-linking
 
 # Analyze prompt performance
 python3 analyze_prompt_performance.py
@@ -361,16 +386,16 @@ graph LR
 ### Testing Commands
 ```bash
 # Test basic Timing integration
-./docker-run.sh timing
+./scripts/deployment/docker-run.sh timing
 
 # Test full Timing + Graphiti flow
 docker compose run gtd-coach python3 test_timing_graphiti_integration.py
 
 # Run review with focus analysis
-./docker-run.sh
+./scripts/deployment/docker-run.sh
 
 # Generate summary with Timing insights
-./docker-run.sh summary
+./scripts/deployment/docker-run.sh summary
 ```
 
 ### API Endpoints Used

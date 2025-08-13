@@ -7,7 +7,7 @@ import os
 import logging
 
 try:
-    from langfuse.openai import openai
+    from langfuse.openai import OpenAI
     from langfuse import observe, get_client
     LANGFUSE_AVAILABLE = True
 except ImportError as e:
@@ -16,7 +16,7 @@ except ImportError as e:
     error_msg = (
         f"Langfuse import failed: {e}\n"
         "Langfuse is required for GTD Coach. Please install it:\n"
-        "  pip install 'langfuse[openai]>=2.0.0'\n"
+        "  pip install 'langfuse[openai]>=3.0.0'\n"
         "Or install all dependencies:\n"
         "  pip install -r requirements.txt"
     )
@@ -44,7 +44,7 @@ def get_langfuse_client():
         os.environ["LANGFUSE_SECRET_KEY"] = LANGFUSE_SECRET_KEY
         
         # Create OpenAI client with LM Studio endpoint
-        client = openai.OpenAI(
+        client = OpenAI(
             base_url="http://localhost:1234/v1",
             api_key="lm-studio"  # LM Studio doesn't require real API key
         )
@@ -72,30 +72,34 @@ def score_graphiti_operation(operation: str, success: bool, latency: float,
         client = get_client()
         
         # Create observation for Graphiti operation
-        client.score(
+        # v3 API returns ID only, processes asynchronously
+        score_id = client.score(
             name=f"graphiti_{operation}",
             value=1.0 if success else 0.0,
             data_type="BOOLEAN",
             comment=f"Episodes: {episode_count}, Latency: {latency:.3f}s"
         )
+        logger.debug(f"Score created with ID: {score_id}")
         
         # Track cost if provided
         if cost_estimate:
-            client.score(
+            cost_score_id = client.score(
                 name="graphiti_cost",
                 value=cost_estimate,
                 data_type="NUMERIC",
                 comment=f"Operation: {operation}"
             )
+            logger.debug(f"Cost score created with ID: {cost_score_id}")
         
         # Track performance metrics
         if latency > 1.0:  # Flag slow operations
-            client.score(
+            perf_score_id = client.score(
                 name="graphiti_slow_operation",
                 value=latency,
                 data_type="NUMERIC", 
                 comment=f"Slow {operation}: {latency:.3f}s"
             )
+            logger.debug(f"Performance score created with ID: {perf_score_id}")
             
     except Exception as e:
         logger.debug(f"Failed to score Graphiti operation: {e}")
@@ -122,12 +126,14 @@ def score_response(phase: str, success: bool, response_time: float, session_id: 
                 logger.debug(f"Failed to set session_id on trace: {e}")
         
         # Score 1: Binary success/failure
-        langfuse.score(
+        # v3 API returns ID only, processes asynchronously
+        success_score_id = langfuse.score(
             trace_id=trace_id,
             name="success",
             value=1 if success else 0,
             comment=f"LLM call {'succeeded' if success else 'failed'}"
         )
+        logger.debug(f"Success score created with ID: {success_score_id}")
         
         # Score 2: Quality based on phase-specific latency thresholds
         # These thresholds are calibrated for ADHD users who need quick responses
@@ -142,21 +148,23 @@ def score_response(phase: str, success: bool, response_time: float, session_id: 
         threshold = latency_thresholds.get(phase, 5.0)
         quality_score = 1 if response_time < threshold else 0
         
-        langfuse.score(
+        quality_score_id = langfuse.score(
             trace_id=trace_id,
             name="quality",
             value=quality_score,
             comment=f"Phase: {phase}, Response: {response_time:.2f}s, Threshold: {threshold}s"
         )
+        logger.debug(f"Quality score created with ID: {quality_score_id}")
         
         # Score 3: Phase-specific response appropriateness
         # This helps track if the coach is meeting phase requirements
-        langfuse.score(
+        phase_score_id = langfuse.score(
             trace_id=trace_id,
             name="phase_appropriate",
             value=1,  # Will be manually reviewed in Langfuse UI
             comment=f"Review in UI for {phase} phase appropriateness"
         )
+        logger.debug(f"Phase score created with ID: {phase_score_id}")
         
     except Exception as e:
         logger.debug(f"Failed to score response: {e}")

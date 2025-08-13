@@ -1,0 +1,70 @@
+# Configuration for GitHub labeler action
+
+agent:
+  - changed-files:
+    - any-glob-to-any-file:
+      - gtd_coach/agent/**/*
+      - tests/agent/**/*
+
+tests:
+  - changed-files:
+    - any-glob-to-any-file:
+      - tests/**/*
+      - '**/test_*.py'
+
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - docs/**/*
+      - '**/*.md'
+      - README.md
+      - CLAUDE.md
+
+ci/cd:
+  - changed-files:
+    - any-glob-to-any-file:
+      - .github/**/*
+      - codecov.yml
+      - .coveragerc
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - requirements*.txt
+      - Pipfile*
+      - poetry.lock
+      - pyproject.toml
+
+docker:
+  - changed-files:
+    - any-glob-to-any-file:
+      - Dockerfile*
+      - docker-compose*.yml
+      - .dockerignore
+
+langgraph:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/state.py'
+      - '**/workflows/*.py'
+      - '**/checkpointer*.py'
+
+adhd-features:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/interventions.py'
+      - '**/adhd_*.py'
+      - '**/pattern*.py'
+
+timing-integration:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/timing*.py'
+      - '**/focus*.py'
+
+memory:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/graphiti*.py'
+      - '**/memory*.py'
+      - '**/pattern_detector.py'

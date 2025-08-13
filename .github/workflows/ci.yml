@@ -1,0 +1,318 @@
+name: GTD Coach CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
+  workflow_dispatch:
+
+env:
+  PYTEST_WORKERS: 4
+  COVERAGE_THRESHOLD: 85
+  CRITICAL_PATH_THRESHOLD: 95
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-lint-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-lint-
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black mypy isort
+      
+      - name: Run Ruff
+        run: ruff check . --select=E,F,I --ignore=E501,F401
+      
+      - name: Check Black formatting
+        run: black --check --diff .
+      
+      - name: Check import sorting
+        run: isort --check-only --diff .
+      
+      - name: Run MyPy
+        run: mypy --ignore-missing-imports --no-strict-optional gtd_coach/
+        continue-on-error: true  # Allow MyPy failures initially
+
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        test-group: ['unit', 'integration', 'agent', 'e2e']
+    
+    services:
+      neo4j:
+        image: neo4j:5-community
+        env:
+          NEO4J_AUTH: neo4j/password123
+          NEO4J_PLUGINS: '["apoc"]'
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p password123 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+            ${{ runner.os }}-pip-
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg  # For audio alerts
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install pytest-xdist pytest-cov pytest-timeout pytest-asyncio
+      
+      - name: Setup test environment
+        run: |
+          cp config/.env.example .env
+          echo "NEO4J_URI=bolt://localhost:7687" >> .env
+          echo "NEO4J_USER=neo4j" >> .env
+          echo "NEO4J_PASSWORD=password123" >> .env
+          echo "TEST_MODE=true" >> .env
+          echo "LM_STUDIO_URL=http://localhost:1234" >> .env
+      
+      - name: Run tests - ${{ matrix.test-group }}
+        run: |
+          if [ "${{ matrix.test-group }}" = "unit" ]; then
+            pytest tests/unit/ -v --cov=gtd_coach --cov-report=xml:coverage-${{ matrix.python-version }}-unit.xml -n ${{ env.PYTEST_WORKERS }}
+          elif [ "${{ matrix.test-group }}" = "integration" ]; then
+            pytest tests/integration/ -v --cov=gtd_coach --cov-report=xml:coverage-${{ matrix.python-version }}-integration.xml -n ${{ env.PYTEST_WORKERS }}
+          elif [ "${{ matrix.test-group }}" = "agent" ]; then
+            pytest tests/agent/ -v --cov=gtd_coach --cov-report=xml:coverage-${{ matrix.python-version }}-agent.xml -n 2 -m "not slow"
+          elif [ "${{ matrix.test-group }}" = "e2e" ]; then
+            pytest tests/agent/ -v --cov=gtd_coach --cov-report=xml:coverage-${{ matrix.python-version }}-e2e.xml -m "slow or e2e" --timeout=300
+          fi
+        timeout-minutes: 15
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+      
+      - name: Upload coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-${{ matrix.python-version }}-${{ matrix.test-group }}
+          path: coverage-*.xml
+
+  coverage:
+    name: Merge Coverage Reports
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install coverage tools
+        run: |
+          pip install coverage[toml] coverage-badge
+      
+      - name: Download all coverage reports
+        uses: actions/download-artifact@v3
+        with:
+          path: coverage-reports
+      
+      - name: Merge coverage reports
+        run: |
+          coverage combine coverage-reports/*/coverage-*.xml
+          coverage report --precision=2
+          coverage xml -o coverage.xml
+          coverage html -d htmlcov
+      
+      - name: Generate coverage badge
+        run: |
+          coverage-badge -o coverage.svg -f
+      
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+      
+      - name: Check coverage thresholds
+        run: |
+          TOTAL_COV=$(coverage report --precision=2 | grep TOTAL | awk '{print $4}' | sed 's/%//')
+          echo "Total coverage: ${TOTAL_COV}%"
+          
+          if (( $(echo "$TOTAL_COV < ${{ env.COVERAGE_THRESHOLD }}" | bc -l) )); then
+            echo "::warning::Coverage ${TOTAL_COV}% is below threshold ${{ env.COVERAGE_THRESHOLD }}%"
+          fi
+          
+          # Check critical path coverage
+          CRITICAL_COV=$(coverage report --precision=2 --include="*/workflows/*,*/tools/*" | grep TOTAL | awk '{print $4}' | sed 's/%//')
+          echo "Critical path coverage: ${CRITICAL_COV}%"
+          
+          if (( $(echo "$CRITICAL_COV < ${{ env.CRITICAL_PATH_THRESHOLD }}" | bc -l) )); then
+            echo "::error::Critical path coverage ${CRITICAL_COV}% is below threshold ${{ env.CRITICAL_PATH_THRESHOLD }}%"
+            exit 1
+          fi
+      
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-html-report
+          path: htmlcov/
+      
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMUM_GREEN: ${{ env.COVERAGE_THRESHOLD }}
+          MINIMUM_ORANGE: 70
+
+  performance:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest-benchmark
+      
+      - name: Run performance benchmarks
+        run: |
+          pytest tests/benchmarks/ -v --benchmark-only --benchmark-json=benchmark.json
+        continue-on-error: true
+      
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'pytest'
+          output-file-path: benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+          comment-on-alert: true
+          alert-threshold: '150%'
+          fail-on-alert: false
+
+  docker:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: gtd-coach:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Test Docker image
+        run: |
+          docker run --rm gtd-coach:test python -c "import gtd_coach; print('Import successful')"
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Check for security issues
+        run: |
+          pip install safety bandit
+          safety check --json
+          bandit -r gtd_coach/ -f json -o bandit-report.json
+        continue-on-error: true
+
+  notify:
+    name: Notify Results
+    needs: [lint, test, coverage, docker]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check job statuses
+        id: check
+        run: |
+          if [[ "${{ needs.lint.result }}" == "failure" || \
+                "${{ needs.test.result }}" == "failure" || \
+                "${{ needs.coverage.result }}" == "failure" || \
+                "${{ needs.docker.result }}" == "failure" ]]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Notify on failure
+        if: steps.check.outputs.status == 'failure' && github.event_name == 'push'
+        run: |
+          echo "::error::CI Pipeline failed. Check the logs for details."

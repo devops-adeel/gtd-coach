@@ -282,9 +282,10 @@ class TestRealisticTimingScenario(unittest.TestCase):
 def run_realistic_tests():
     """Run realistic scenario tests"""
     if not os.getenv('TIMING_API_KEY'):
-        # Set the provided API key
-        api_key = "***REMOVED***"
-        os.environ['TIMING_API_KEY'] = api_key
+        print("⚠️ TIMING_API_KEY not found in environment")
+        print("Please set TIMING_API_KEY environment variable to run this test")
+        print("Get your API key from: https://web.timingapp.com")
+        return False
     
     # Run tests
     suite = unittest.TestLoader().loadTestsFromTestCase(TestRealisticTimingScenario)

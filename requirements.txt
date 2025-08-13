@@ -1,16 +1,33 @@
 # GTD Coach Dependencies
-# Updated: August 10, 2025 - All packages at latest stable versions
+# Updated: January 2025 - LangChain v0.3+ compatible versions
 
 # Core dependencies
-requests==2.32.4  # For LM Studio API calls (released June 2025, latest as of Aug 2025)
-python-dotenv==1.1.1  # For loading environment variables from .env file (latest)
+requests==2.32.4  # For LM Studio API calls
+python-dotenv==1.1.1  # For loading environment variables from .env file
 
-# Graphiti Integration
-graphiti-core[openai]==0.18.5  # Knowledge graph memory with OpenAI support (latest stable)
-neo4j==5.28.2  # Neo4j driver for Python (released July 30, 2025, latest)
+# Graphiti Integration - Latest compatible version
+graphiti-core[openai]==0.18.5  # Knowledge graph memory (latest stable)
+neo4j==5.28.2  # Neo4j driver for Python
 
 # LLM Observability
-langfuse[openai]==3.2.3  # LLM observability with OpenAI integration (latest as of Aug 2025)
+langfuse[openai]==3.2.4  # LLM observability with OpenAI integration (v3 with OpenTelemetry)
+
+# LangGraph and LangChain v0.3+ (resolves tenacity conflicts)
+langgraph>=0.3.27  # Stateful agent framework (latest stable)
+langgraph-sdk>=0.1.66  # LangGraph SDK for platform integration
+langgraph-checkpoint>=2.0.23  # Checkpointing for state persistence
+langgraph-checkpoint-sqlite>=2.0.0  # SQLite checkpointer for persistence
+langchain-core>=0.3.10  # Core LangChain components (v0.3+ for Pydantic 2)
+langchain-openai>=0.2.0  # OpenAI integration for LangChain
+langchain-community>=0.3.0  # Community integrations
+langsmith>=0.1.63  # LangSmith for monitoring and debugging
+
+# Additional dependencies for LangGraph
+orjson>=3.9.7,<3.10.17  # Fast JSON serialization
+httpx>=0.25.0  # Modern HTTP client
+tenacity>=8.0.0  # Retry logic (compatible with all packages now)
+structlog>=24.1.0  # Structured logging
+cloudpickle>=3.0.0  # Extended pickling support
 
 # Configuration
 PyYAML>=6.0  # For YAML configuration files (experiment schedules)
@@ -18,5 +35,18 @@ PyYAML>=6.0  # For YAML configuration files (experiment schedules)
 # Pattern Learning and Analysis (Phase 2)
 scipy>=1.10.0  # For statistical analysis and trend detection
 numpy>=1.24.0  # For numerical operations and pattern analysis
+
+# System monitoring (optional but recommended for agent system)
+psutil>=5.9.0  # For system resource monitoring
+
+# Async support
+aiofiles>=23.0.0  # For async file operations
+
+# Testing dependencies
+pytest>=8.0.0  # Testing framework
+pytest-asyncio>=0.23.0  # Async test support
+pytest-mock>=3.12.0  # Mocking support for tests
+pytest-json-report>=1.5.0  # JSON test reporting
+pytest-cov>=5.0.0  # Coverage reporting
 
 # Note: asyncio is a built-in Python module and doesn't need to be installed

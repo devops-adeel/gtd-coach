@@ -1,0 +1,9 @@
+{
+  "dependencies": [".", "./gtd_coach"],
+  "graphs": {
+    "daily_capture": "./gtd_coach/agent/workflows/daily_capture.py:create_workflow",
+    "weekly_review": "./gtd_coach/agent/workflows/weekly_review.py:create_workflow"
+  },
+  "env": "./.env",
+  "python_version": "3.11"
+}
