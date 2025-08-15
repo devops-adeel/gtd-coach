@@ -7,13 +7,14 @@ Central registry for all agent tools with versioning support
 from typing import Dict, List, Any, Optional
 import logging
 
-# Import time management tools (NEW)
-from .time_manager import (
-    check_time_tool,
-    transition_phase_tool,
-    send_alert_tool,
-    get_session_time_summary_tool,
-    set_time_reminder_tool
+# Import time management tools (V2 - No InjectedState)
+from .time_manager_v2 import (
+    check_time_v2 as check_time_tool,
+    transition_phase_v2 as transition_phase_tool,
+    send_alert_v2 as send_alert_tool,
+    get_session_summary_v2 as get_session_time_summary_tool,
+    set_reminder_v2 as set_time_reminder_tool,
+    initialize_state_manager
 )
 
 # Import interaction tools (NEW)
@@ -362,3 +363,21 @@ INTERACTION_TOOLS = [
 # All tools for export
 ALL_TOOLS = (TIME_TOOLS + INTERACTION_TOOLS + TIMING_TOOLS + 
             CAPTURE_TOOLS + GTD_TOOLS + MEMORY_TOOLS + ADAPTIVE_TOOLS)
+
+# Minimal essential tools for weekly review (to fit in 4096 token context)
+ESSENTIAL_TOOLS = [
+    # Core time management (2)
+    check_time_tool,
+    transition_phase_tool,
+    # Core capture (2) 
+    brain_dump_tool,
+    capture_item_tool,
+    # Core GTD (2)
+    clarify_items_tool,
+    prioritize_actions_tool,
+    # Core interaction (2)
+    structured_input_tool,
+    show_progress_tool,
+    # Core memory (1)
+    save_memory_tool,
+]

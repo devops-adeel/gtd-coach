@@ -7,6 +7,7 @@ Orchestrates the weekly review with all phases and tools
 import logging
 import asyncio
 import sys
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
@@ -16,7 +17,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 # Import agent components
 from gtd_coach.agent.core import GTDAgent
-from gtd_coach.agent.tools import ALL_TOOLS
+from gtd_coach.agent.tools import ALL_TOOLS, ESSENTIAL_TOOLS, initialize_state_manager
 from gtd_coach.agent.state import AgentState
 
 # Import integrations
@@ -39,17 +40,24 @@ class GTDAgentRunner:
         # Set up logging
         self.setup_logging()
         
-        # Initialize components
-        self.agent = GTDAgent()
-        self.memory = GraphitiMemory()
-        self.pattern_detector = ADHDPatternDetector()
-        
-        # Set tools on agent
-        self.agent.set_tools(ALL_TOOLS)
-        
-        # Session tracking
+        # Session tracking (needs to be first for GraphitiMemory)
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.user_id = datetime.now().strftime("%G-W%V")  # Weekly user ID
+        
+        # Initialize components with correct LM Studio URL
+        lm_studio_url = os.getenv('LM_STUDIO_URL', 'http://host.docker.internal:1234/v1')
+        self.agent = GTDAgent(lm_studio_url=lm_studio_url)
+        self.memory = GraphitiMemory(session_id=self.session_id)
+        self.pattern_detector = ADHDPatternDetector()
+        
+        # Set tools on agent - try ALL_TOOLS now that state injection is fixed
+        try:
+            self.agent.set_tools(ALL_TOOLS)
+            logger.info(f"Using full tool set ({len(ALL_TOOLS)} tools)")
+        except Exception as e:
+            logger.warning(f"Failed to use full tool set: {e}")
+            logger.warning(f"Falling back to essential tools ({len(ESSENTIAL_TOOLS)} tools)")
+            self.agent.set_tools(ESSENTIAL_TOOLS)
         
         logger.info(f"Initialized GTD Agent Runner - Session: {self.session_id}")
     
@@ -77,37 +85,84 @@ class GTDAgentRunner:
             Initial state dictionary
         """
         return {
+            # Core messaging
             "messages": [],
+            
+            # Session management  
             "session_id": self.session_id,
             "workflow_type": "weekly_review",
             "started_at": datetime.now().isoformat(),
             "user_id": self.user_id,
+            
+            # User context
             "user_context": {},
+            "previous_session": None,
+            "recurring_patterns": None,
+            
+            # ADHD & Adaptive
             "adhd_patterns": [],
             "accountability_mode": "firm",
+            "user_energy": None,
+            "focus_level": None,
+            "stress_indicators": [],
+            
+            # GTD data
             "captures": [],
             "processed_items": [],
             "projects": [],
             "weekly_priorities": [],
+            
+            # Timing integration
+            "timing_data": None,
+            "focus_score": None,
+            "context_switches": None,
+            "uncategorized_minutes": None,
+            
+            # Graphiti memory
+            "graphiti_episode_ids": [],
+            "memory_batch": [],
+            
+            # Workflow control
             "current_phase": "STARTUP",
             "completed_phases": [],
+            "available_tools": [t.name for t in ESSENTIAL_TOOLS],
+            "tool_history": [],
+            
+            # Time management
             "phase_start_time": datetime.now(),
             "phase_time_limit": 2,  # STARTUP is 2 minutes
-            "total_elapsed": 0,
+            "total_elapsed": 0.0,
             "time_warnings": [],
+            "last_time_check": None,
             "time_pressure_mode": False,
+            
+            # Interaction management
             "interaction_mode": "conversational",
+            "awaiting_input": False,
+            "input_timeout": None,
+            
+            # Context window management
             "context_usage": {},
             "message_summary": "",
             "phase_summary": "",
             "phase_changed": False,
             "context_overflow_count": 0,
-            "phase_durations": {},
+            
+            # Error handling
             "errors": [],
             "retry_count": 0,
+            "last_checkpoint": None,
+            
+            # Metrics
+            "phase_durations": {},
+            "tool_latencies": {},
+            "llm_token_usage": {},
+            
+            # Feature flags
             "skip_timing": False,
-            "verbose_mode": True,
-            "test_mode": False
+            "voice_enabled": False,
+            "verbose_mode": False,
+            "test_mode": False,
         }
     
     def run_weekly_review(self, resume: bool = False, thread_id: Optional[str] = None) -> int:
@@ -139,9 +194,16 @@ class GTDAgentRunner:
                 # Create initial state
                 state = self.create_initial_state()
                 
-                # Add welcome message
+                # Initialize state manager for V2 tools
+                initialize_state_manager(state)
+                logger.info("Initialized state manager for V2 tools")
+                
+                # Add welcome message as system message
                 welcome = self._get_welcome_message()
                 state["messages"].append(SystemMessage(content=welcome))
+                
+                # Add initial user message to start the conversation
+                state["messages"].append(HumanMessage(content="Let's start the GTD weekly review."))
             
             # Run the agent with streaming
             print("\n" + "="*60)
