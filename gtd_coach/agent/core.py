@@ -35,15 +35,15 @@ class GTDAgent:
         'WRAP_UP': 3
     }
     
-    # Token budget allocation (32K total)
-    MAX_INPUT_TOKENS = 4000  # Conservative limit for input
+    # Token budget allocation (optimized for xLAM-7b-fc-r)
+    MAX_INPUT_TOKENS = 6000  # Increased for better tool descriptions
     MAX_RESPONSE_TOKENS = 2000  # Response generation
     SUMMARY_TOKENS = 500  # Phase summaries
-    SAFETY_BUFFER = 25500  # Reserve for system prompt and tools
+    SAFETY_BUFFER = 23500  # Reserve for system prompt and tools
     
     def __init__(self, 
                  lm_studio_url: str = "http://localhost:1234/v1",
-                 model_name: str = "meta-llama-3.1-8b-instruct",
+                 model_name: str = "xlam-7b-fc-r",  # Default to xLAM function calling model
                  checkpoint_dir: Optional[Path] = None,
                  use_memory_saver: bool = False):
         """
@@ -65,10 +65,10 @@ class GTDAgent:
         if use_memory_saver:
             self.checkpointer = InMemorySaver()
         else:
-            checkpoint_dir = checkpoint_dir or Path.home() / "gtd-coach" / "data" / "checkpoints"
-            checkpoint_dir.mkdir(parents=True, exist_ok=True)
-            db_path = checkpoint_dir / "gtd_agent.db"
-            self.checkpointer = SqliteSaver.from_conn_string(str(db_path))
+            # For now, use InMemorySaver to avoid SQLite issues
+            # TODO: Fix SqliteSaver implementation
+            self.checkpointer = InMemorySaver()
+            logger.warning("Using InMemorySaver instead of SqliteSaver due to compatibility issues")
         
         # Will be populated with tools
         self.tools = []
@@ -165,12 +165,11 @@ class GTDAgent:
         if not self.tools:
             raise ValueError("Tools must be set before creating agent")
         
-        # Create agent with pre-model hook for context management
+        # Create agent with tools (V2 tools don't need state injection)
         self.agent = create_react_agent(
             self.llm,
             self.tools,
-            state_modifier=self._pre_model_hook,
-            checkpointer=self.checkpointer,
+            checkpointer=self.checkpointer
         )
         
         logger.info(f"Created ReAct agent with {len(self.tools)} tools")
@@ -263,12 +262,13 @@ class GTDAgent:
         mode = state.get("accountability_mode", "firm")
         phase = state.get("current_phase", "STARTUP")
         
-        # Compact ADHD-optimized prompt
+        # Compact ADHD-optimized prompt with tool hints for xLAM
         base_prompt = (
             "You are an ADHD coach guiding a 30-minute GTD weekly review. "
             f"Current phase: {phase}. "
             "Be concise, supportive, and time-aware. "
             "Help user stay focused and celebrate progress. "
+            "Use available tools to manage time, capture items, and track progress. "
         )
         
         if mode == "firm":

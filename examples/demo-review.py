@@ -12,7 +12,7 @@ def send_message(messages):
     """Send message to LLM and return response"""
     response = requests.post("http://localhost:1234/v1/chat/completions", 
         json={
-            "model": "meta-llama-3.1-8b-instruct",
+            "model": "xlam-7b-fc-r",  # Using xLAM function calling model
             "messages": messages,
             "temperature": 0.3,
             "max_tokens": 300
