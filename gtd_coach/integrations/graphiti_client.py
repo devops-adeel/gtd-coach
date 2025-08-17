@@ -116,11 +116,14 @@ class GraphitiClient:
                 if GTD_ENTITIES_AVAILABLE:
                     logger.info("GTD entities available for selective use in add_episode() calls")
                 
+                # Note: Current graphiti_core version doesn't support custom database names
+                # It will use the default 'neo4j' database
+                logger.info(f"Connecting to Neo4j at {os.getenv('NEO4J_URI')}")
+                
                 self.client = Graphiti(
                     uri=os.getenv('NEO4J_URI'),
                     user=os.getenv('NEO4J_USER'),
                     password=os.getenv('NEO4J_PASSWORD'),
-                    # Note: database parameter is not directly supported, uses default
                     llm_client=llm_client,
                     embedder=embedder,
                     cross_encoder=cross_encoder
