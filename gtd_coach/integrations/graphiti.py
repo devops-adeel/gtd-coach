@@ -36,7 +36,9 @@ class GraphitiMemory:
     
     def __init__(self, session_id: str, enable_json_backup: bool = True):
         self.session_id = session_id
-        self.session_group_id = f"gtd_review_{session_id}"
+        # Use shared group_id from environment for shared knowledge across all agents
+        # Falls back to session-specific if GRAPHITI_GROUP_ID not set
+        self.session_group_id = os.getenv('GRAPHITI_GROUP_ID', f"gtd_review_{session_id}")
         self.pending_episodes: List[Dict[str, Any]] = []
         self.phase_start_times: Dict[str, datetime] = {}
         self.interaction_count = 0
@@ -322,7 +324,7 @@ class GraphitiMemory:
         retry_delays = [1, 2, 4]  # Exponential backoff
         
         # Import entity configuration
-        from gtd_entity_config import (
+        from gtd_coach.integrations.gtd_entity_config import (
             get_entity_config_for_episode,
             estimate_extraction_cost,
             log_entity_extraction
@@ -419,7 +421,7 @@ class GraphitiMemory:
         latency = time.perf_counter() - start_time
         try:
             from gtd_coach.integrations.langfuse import score_graphiti_operation
-            from gtd_entity_config import estimate_extraction_cost
+            from gtd_coach.integrations.gtd_entity_config import estimate_extraction_cost
             
             # Estimate cost based on whether custom entities were used
             episode_body_length = len(json.dumps(episode_data.get('data', {})))

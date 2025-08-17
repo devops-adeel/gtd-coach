@@ -21,11 +21,17 @@ services:
       - TIMING_API_KEY=${TIMING_API_KEY:-}
       - TIMING_MIN_MINUTES=${TIMING_MIN_MINUTES:-30}
       
-      # Neo4j configuration for Graphiti (using external container)
-      - NEO4J_URI=${NEO4J_URI:-bolt://host.docker.internal:7687}
-      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      # FalkorDB configuration for Graphiti
+      - FALKORDB_HOST=${FALKORDB_HOST:-host.docker.internal}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6380}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-shared_gtd_knowledge}
+      - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-shared_knowledge}
+      - GRAPHITI_ENABLED=${GRAPHITI_ENABLED:-true}
+      
+      # OpenAI configuration for Graphiti
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       
       # Application settings
       - PYTHONPATH=/app
@@ -38,32 +44,8 @@ services:
       - ./config:/app/config:ro
     networks:
       - gtd-network
-    # depends_on removed - using external neo4j-graphiti container
+    # FalkorDB is running externally on host port 6380
     restart: unless-stopped
-
-  # Neo4j database for Graphiti memory - DISABLED (using external neo4j-graphiti container)
-  # neo4j:
-  #   image: neo4j:5-community
-  #   container_name: gtd-neo4j
-  #   environment:
-  #     - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-gtd-password}
-  #     - NEO4J_PLUGINS=["apoc", "graph-data-science"]
-  #     - NEO4J_dbms_memory_pagecache_size=512m
-  #     - NEO4J_dbms_memory_heap_max__size=512m
-  #   ports:
-  #     - "7474:7474"  # Browser
-  #     - "7687:7687"  # Bolt
-  #   volumes:
-  #     - neo4j-data:/data
-  #     - neo4j-logs:/logs
-  #   networks:
-  #     - gtd-network
-  #   healthcheck:
-  #     test: ["CMD", "cypher-shell", "-u", "${NEO4J_USERNAME:-neo4j}", "-p", "${NEO4J_PASSWORD:-gtd-password}", "RETURN 1"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   restart: unless-stopped
 
   # Test runner service
   test-runner:
@@ -76,10 +58,10 @@ services:
     environment:
       - TEST_MODE=true
       - MOCK_EXTERNAL_APIS=${MOCK_EXTERNAL_APIS:-true}
-      - NEO4J_URI=bolt://host.docker.internal:7687
-      - NEO4J_USERNAME=neo4j
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-gtd-password}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - FALKORDB_HOST=host.docker.internal
+      - FALKORDB_PORT=6380
+      - FALKORDB_DATABASE=shared_gtd_knowledge_test
+      - GRAPHITI_GROUP_ID=test_group
       - PYTHONPATH=/app
       - PYTEST_WORKERS=${PYTEST_WORKERS:-auto}
     volumes:
@@ -89,7 +71,6 @@ services:
       - ./.pytest_cache:/app/.pytest_cache
     networks:
       - gtd-network
-    # depends_on removed - using external neo4j-graphiti container
     profiles:
       - test
 
@@ -105,28 +86,72 @@ services:
       - ENVIRONMENT=development
       - DEBUG=true
       - LM_STUDIO_URL=http://host.docker.internal:1234
-      - NEO4J_URI=bolt://host.docker.internal:7687
-      - NEO4J_USERNAME=neo4j
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-gtd-password}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - FALKORDB_HOST=host.docker.internal
+      - FALKORDB_PORT=6380
+      - FALKORDB_DATABASE=shared_gtd_knowledge
+      - GRAPHITI_GROUP_ID=shared_knowledge
       - PYTHONPATH=/app
     volumes:
       - .:/app  # Mount entire directory for hot reload
       - /app/.venv  # Exclude virtual env if it exists
     networks:
       - gtd-network
-    # depends_on removed - using external neo4j-graphiti container
     profiles:
       - dev
     command: /bin/bash
     stdin_open: true
     tty: true
 
+  # Langfuse test service
+  test-langfuse:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: gtd-coach:latest
+    container_name: gtd-coach-langfuse-test
+    environment:
+      - LM_STUDIO_URL=http://host.docker.internal:1234
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://host.docker.internal:3000}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - PYTHONPATH=/app
+      - TEST_MODE=true
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - gtd-network
+    command: python3 test_langfuse.py
+    profiles:
+      - test
+
+  # Summary generator service
+  generate-summary:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: gtd-coach:latest
+    container_name: gtd-coach-summary
+    environment:
+      - LM_STUDIO_URL=http://host.docker.internal:1234
+      - FALKORDB_HOST=host.docker.internal
+      - FALKORDB_PORT=6380
+      - FALKORDB_DATABASE=shared_gtd_knowledge
+      - GRAPHITI_GROUP_ID=shared_knowledge
+      - PYTHONPATH=/app
+    volumes:
+      - ./data:/app/data
+      - ./summaries:/app/summaries
+    networks:
+      - gtd-network
+    command: python3 scripts/generate_summary.py
+    profiles:
+      - tools
+
 networks:
   gtd-network:
     driver: bridge
 
-# Volumes commented out - using external neo4j-graphiti container
-# volumes:
-#   neo4j-data:
-#   neo4j-logs:
+# FalkorDB runs externally, no volumes needed for database

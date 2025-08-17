@@ -64,20 +64,18 @@ def event_loop():
     loop.close()
 
 
-# ==================== Neo4j / Graphiti Mocks ====================
+# ==================== FalkorDB / Graphiti Mocks ====================
 
 @pytest.fixture
-def mock_neo4j_driver():
-    """Mock Neo4j driver."""
+def mock_falkordb_driver():
+    """Mock FalkorDB driver."""
     driver = Mock()
-    driver.verify_connectivity = Mock(return_value=True)
-    driver.close = Mock()
+    driver.close = AsyncMock()
     
-    # Mock session
-    session = Mock()
-    session.run = Mock(return_value=Mock(data=Mock(return_value=[])))
-    session.close = Mock()
-    driver.session = Mock(return_value=session)
+    # Mock graph operations
+    driver.query = AsyncMock(return_value=[])
+    driver.execute = AsyncMock()
+    driver.create_index = AsyncMock()
     
     return driver
 
@@ -332,7 +330,7 @@ def pytest_configure(config):
         "markers", "integration: Integration tests that may require mocking"
     )
     config.addinivalue_line(
-        "markers", "requires_neo4j: Tests requiring Neo4j (will be skipped)"
+        "markers", "requires_falkordb: Tests requiring FalkorDB connection"
     )
     config.addinivalue_line(
         "markers", "requires_api_keys: Tests requiring real API keys (will be skipped)"
@@ -341,13 +339,13 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """Automatically skip tests that require real services."""
-    skip_neo4j = pytest.mark.skip(reason="Neo4j not available in test environment")
+    skip_falkordb = pytest.mark.skip(reason="FalkorDB not available in test environment")
     skip_api_keys = pytest.mark.skip(reason="Real API keys not available in test environment")
     
     for item in items:
-        # Skip tests requiring Neo4j
-        if "requires_neo4j" in item.keywords:
-            item.add_marker(skip_neo4j)
+        # Skip tests requiring FalkorDB
+        if "requires_falkordb" in item.keywords:
+            item.add_marker(skip_falkordb)
         
         # Skip tests requiring real API keys
         if "requires_api_keys" in item.keywords:

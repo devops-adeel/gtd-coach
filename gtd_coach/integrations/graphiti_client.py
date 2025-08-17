@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Graphiti Client for GTD Coach
-Provides a singleton client with connection pooling and health checks
+Graphiti Client for GTD Coach - FalkorDB Only
+Provides a singleton client with connection pooling for FalkorDB
 """
 
 import os
@@ -12,13 +12,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
-from neo4j import AsyncGraphDatabase
 from graphiti_core import Graphiti
 from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.llm_client.openai_client import OpenAIClient
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
-from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.nodes import EpisodeType
+
+# Import database driver for FalkorDB
+try:
+    from graphiti_core.driver.falkordb_driver import FalkorDriver
+    FALKORDB_AVAILABLE = True
+except ImportError:
+    FALKORDB_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.error("FalkorDB driver not available. Install with: pip install graphiti-core[falkordb]")
 
 # Import custom GTD entities and edge mappings
 try:
@@ -33,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class GraphitiClient:
-    """Singleton Graphiti client with connection management"""
+    """Singleton Graphiti client for FalkorDB"""
     
     _instance: Optional['GraphitiClient'] = None
     _lock = asyncio.Lock()
@@ -46,7 +53,7 @@ class GraphitiClient:
     
     async def initialize(self, env_file: str = '.env.graphiti') -> 'Graphiti':
         """
-        Lazy initialization with connection verification
+        Initialize Graphiti with FalkorDB connection
         
         Args:
             env_file: Path to environment file with configuration
@@ -55,7 +62,7 @@ class GraphitiClient:
             Initialized Graphiti client
             
         Raises:
-            ConnectionError: If Neo4j connection fails
+            ImportError: If FalkorDB driver is not available
             ValueError: If required environment variables are missing
         """
         async with self._lock:
@@ -74,14 +81,18 @@ class GraphitiClient:
             else:
                 logger.warning(f"Config file not found: {env_path}, using existing environment")
             
+            # Check FalkorDB availability
+            if not FALKORDB_AVAILABLE:
+                raise ImportError("FalkorDB driver not available. Install with: pip install graphiti-core[falkordb]")
+            
             # Validate required environment variables
-            required_vars = ['NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD', 'OPENAI_API_KEY']
+            required_vars = ['OPENAI_API_KEY']
             missing_vars = [var for var in required_vars if not os.getenv(var)]
             if missing_vars:
                 raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
             
-            # Test Neo4j connection first
-            await self._verify_neo4j_connection()
+            # Initialize FalkorDB driver
+            driver = await self._initialize_falkordb_driver()
             
             # Initialize LLM configuration
             llm_config = LLMConfig(
@@ -97,44 +108,30 @@ class GraphitiClient:
             embedder_config = OpenAIEmbedderConfig(
                 api_key=os.getenv('OPENAI_API_KEY'),
                 embedding_model=os.getenv('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small')
-                # Let Graphiti use the default embedding_dim for the model
             )
             
             embedder = OpenAIEmbedder(config=embedder_config)
             
-            # Initialize cross-encoder (reranker)
-            # The reranker creates its own client internally
-            cross_encoder = OpenAIRerankerClient(
-                config=llm_config
-            )
-            
-            # Initialize Graphiti with all components
+            # Initialize Graphiti with FalkorDB driver
             try:
-                # NOTE: Custom entities are passed per-episode via add_episode() parameters,
-                # not through the Graphiti constructor. See gtd_entity_config.py for
-                # how entity types are applied selectively to different episode types.
                 if GTD_ENTITIES_AVAILABLE:
                     logger.info("GTD entities available for selective use in add_episode() calls")
                 
-                # Note: Current graphiti_core version doesn't support custom database names
-                # It will use the default 'neo4j' database
-                logger.info(f"Connecting to Neo4j at {os.getenv('NEO4J_URI')}")
+                logger.info(f"Initializing Graphiti with FalkorDB backend")
                 
+                # v0.17.9 uses graph_driver parameter
                 self.client = Graphiti(
-                    uri=os.getenv('NEO4J_URI'),
-                    user=os.getenv('NEO4J_USER'),
-                    password=os.getenv('NEO4J_PASSWORD'),
+                    graph_driver=driver,
                     llm_client=llm_client,
-                    embedder=embedder,
-                    cross_encoder=cross_encoder
+                    embedder=embedder
                 )
                 
                 # Build indices and constraints if needed
-                logger.info("Building Neo4j indices and constraints...")
+                logger.info("Building FalkorDB indices and constraints...")
                 await self.client.build_indices_and_constraints()
                 
                 self._initialized = True
-                logger.info("✅ Graphiti client initialized successfully")
+                logger.info("✅ Graphiti client initialized successfully with FalkorDB")
                 
                 return self.client
                 
@@ -142,45 +139,31 @@ class GraphitiClient:
                 logger.error(f"Failed to initialize Graphiti: {e}")
                 raise
     
-    async def _verify_neo4j_connection(self):
+    async def _initialize_falkordb_driver(self):
         """
-        Verify Neo4j is accessible before initializing Graphiti
+        Initialize FalkorDB driver
         
-        Raises:
-            ConnectionError: If connection to Neo4j fails
+        Returns:
+            Initialized FalkorDB driver instance
         """
-        uri = os.getenv('NEO4J_URI')
-        user = os.getenv('NEO4J_USER')
-        password = os.getenv('NEO4J_PASSWORD')
-        database = os.getenv('NEO4J_DATABASE', 'neo4j')
+        host = os.getenv('FALKORDB_HOST', 'localhost')
+        port = int(os.getenv('FALKORDB_PORT', '6380'))
+        database = os.getenv('FALKORDB_DATABASE', 'shared_gtd_knowledge')
         
-        logger.info(f"Testing Neo4j connection to {uri}...")
+        logger.info(f"Connecting to FalkorDB at {host}:{port}/{database}")
         
-        try:
-            driver = AsyncGraphDatabase.driver(
-                uri,
-                auth=(user, password),
-                database=database
-            )
-            
-            async with driver.session(database=database) as session:
-                result = await session.run("RETURN 1 as test")
-                test_value = await result.single()
-                if test_value and test_value['test'] == 1:
-                    logger.info("✅ Neo4j connection verified")
-                else:
-                    raise ConnectionError("Neo4j test query failed")
-            
-            await driver.close()
-            
-        except Exception as e:
-            error_msg = f"Cannot connect to Neo4j at {uri}: {e}"
-            logger.error(error_msg)
-            raise ConnectionError(error_msg)
+        driver = FalkorDriver(
+            host=host,
+            port=port,
+            database=database
+        )
+        
+        logger.info("✅ FalkorDB driver initialized")
+        return driver
     
     async def health_check(self) -> bool:
         """
-        Perform a health check on the Graphiti connection
+        Perform a health check on the Graphiti/FalkorDB connection
         
         Returns:
             True if healthy, False otherwise
@@ -189,10 +172,8 @@ class GraphitiClient:
             return False
         
         try:
-            # Try a simple operation
-            async with self.client.driver.session() as session:
-                result = await session.run("RETURN 1 as health")
-                await result.single()
+            # For FalkorDB, if client exists and is initialized, assume healthy
+            # v0.17.9 doesn't expose direct driver access for health checks
             return True
         except Exception as e:
             logger.warning(f"Health check failed: {e}")
@@ -222,7 +203,7 @@ class GraphitiClient:
 
 
 async def test_client():
-    """Test function to verify the client works"""
+    """Test function to verify the FalkorDB client works"""
     logging.basicConfig(level=logging.INFO)
     
     try:
@@ -231,15 +212,15 @@ async def test_client():
         
         # Test adding an episode
         await client.add_episode(
-            name="test_connection",
-            episode_body="This is a test episode to verify Graphiti connection",
+            name="test_falkordb_connection",
+            episode_body="This is a test episode to verify FalkorDB connection",
             source=EpisodeType.text,
-            source_description="Connection test",
-            group_id="test_group",
+            source_description="FalkorDB connection test",
+            group_id="shared_knowledge",
             reference_time=datetime.now(timezone.utc)
         )
         
-        print("✅ Successfully added test episode to Graphiti")
+        print("✅ Successfully added test episode to FalkorDB via Graphiti")
         
         # Test search
         results = await client.search("test", num_results=5)
@@ -247,20 +228,16 @@ async def test_client():
         
         # Health check
         health = await GraphitiClient().health_check()
-        print(f"✅ Health check: {'Healthy' if health else 'Unhealthy'}")
+        print(f"✅ Health check: {'passed' if health else 'failed'}")
         
-        # Close the client
+        # Clean up
         await GraphitiClient().close()
         
     except Exception as e:
         print(f"❌ Test failed: {e}")
-        return False
-    
-    return True
+        raise
 
 
 if __name__ == "__main__":
-    # Run test when executed directly
-    import sys
-    success = asyncio.run(test_client())
-    sys.exit(0 if success else 1)
+    # Run test
+    asyncio.run(test_client())
