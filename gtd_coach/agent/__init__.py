@@ -9,10 +9,12 @@ import logging
 from typing import Dict, List, Optional, Literal
 from datetime import datetime
 
-# Note: These imports require langchain_openai which is not yet installed
-# Commenting out for now as we're using the workflows directly
-# from langchain_openai import ChatOpenAI
-# from langfuse.openai import OpenAI as LangfuseOpenAI
+from langchain_openai import ChatOpenAI
+try:
+    from langfuse.openai import OpenAI as LangfuseOpenAI
+except ImportError:
+    LangfuseOpenAI = None
+    logger.warning("Langfuse OpenAI wrapper not available")
 # from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
@@ -71,31 +73,26 @@ class GTDAgent:
         # Get LM Studio URL from environment
         lm_studio_url = os.getenv('LM_STUDIO_URL', 'http://localhost:1234/v1')
         
-        # Temporarily return None until langchain_openai is installed
-        logger.warning("LLM client initialization skipped - langchain_openai not installed")
-        return None
+        if use_langfuse and os.getenv('LANGFUSE_PUBLIC_KEY') and LangfuseOpenAI:
+            # Use Langfuse wrapper for observability
+            logger.info("Using Langfuse-wrapped OpenAI client")
+            client = LangfuseOpenAI(
+                base_url=lm_studio_url,
+                api_key="lm-studio",  # LM Studio doesn't need a real key
+                default_headers={"X-Custom-Header": "gtd-agent"}
+            )
+        else:
+            # Use standard OpenAI client
+            logger.info("Using standard OpenAI client")
+            client = ChatOpenAI(
+                base_url=lm_studio_url,
+                api_key="lm-studio",
+                model="meta-llama-3.1-8b-instruct",
+                temperature=0.7,
+                max_tokens=500
+            )
         
-        # TODO: Uncomment when langchain_openai is installed
-        # if use_langfuse and os.getenv('LANGFUSE_PUBLIC_KEY'):
-        #     # Use Langfuse wrapper for observability
-        #     logger.info("Using Langfuse-wrapped OpenAI client")
-        #     client = LangfuseOpenAI(
-        #         base_url=lm_studio_url,
-        #         api_key="lm-studio",  # LM Studio doesn't need a real key
-        #         default_headers={"X-Custom-Header": "gtd-agent"}
-        #     )
-        # else:
-        #     # Use standard OpenAI client
-        #     logger.info("Using standard OpenAI client")
-        #     client = ChatOpenAI(
-        #         base_url=lm_studio_url,
-        #         api_key="lm-studio",
-        #         model="meta-llama-3.1-8b-instruct",
-        #         temperature=0.7,
-        #         max_tokens=500
-        #     )
-        # 
-        # return client
+        return client
     
     def _get_tools_for_workflow(self) -> List:
         """Get appropriate tools based on workflow type"""
