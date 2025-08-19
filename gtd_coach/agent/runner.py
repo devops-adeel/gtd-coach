@@ -192,19 +192,21 @@ class GTDAgentRunner:
                 state = None  # Agent will load from checkpoint
             else:
                 logger.info("Starting new weekly review")
-                # Create initial state
-                state = self.create_initial_state()
+                # Start with minimal state to debug streaming issue
+                state = {
+                    "messages": [
+                        HumanMessage(content="Let's start the GTD weekly review.")
+                    ]
+                }
+                
+                # Add essential fields only
+                state["session_id"] = self.session_id
+                state["workflow_type"] = "weekly_review"
+                state["current_phase"] = "STARTUP"
                 
                 # Initialize state manager for V2 tools
                 initialize_state_manager(state)
-                logger.info("Initialized state manager for V2 tools")
-                
-                # Add welcome message as system message
-                welcome = self._get_welcome_message()
-                state["messages"].append(SystemMessage(content=welcome))
-                
-                # Add initial user message to start the conversation
-                state["messages"].append(HumanMessage(content="Let's start the GTD weekly review."))
+                logger.info("Initialized state manager for V2 tools with minimal state")
             
             # Run the agent with streaming
             print("\n" + "="*60)
