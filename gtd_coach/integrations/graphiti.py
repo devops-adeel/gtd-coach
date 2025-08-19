@@ -821,6 +821,9 @@ class GraphitiMemory:
         
         await self.queue_episode(summary_data)
         await self.flush_episodes()
+        
+        # Prepare context for next session after completing current session
+        await self.prepare_next_session_context(review_data, timing_data)
     
     def _report_performance_metrics(self) -> None:
         """Report performance metrics for entity extraction"""
@@ -855,6 +858,172 @@ class GraphitiMemory:
             logger.info(f"Total episodes: {len(all_times)}")
         
         logger.info("=" * 60)
+    
+    async def prepare_next_session_context(self, review_data: Dict[str, Any], 
+                                          timing_data: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Prepare context for the next session by analyzing patterns and saving insights
+        Runs AFTER session completes to avoid impacting session performance
+        
+        Args:
+            review_data: Complete review data from current session
+            timing_data: Optional timing analysis data
+        """
+        try:
+            import time
+            start_time = time.perf_counter()
+            
+            # Collect patterns from this session
+            session_patterns = []
+            
+            # Extract mindsweep patterns if available
+            if 'mindsweep_items' in review_data:
+                from gtd_coach.patterns.adhd_metrics import ADHDPatternDetector
+                detector = ADHDPatternDetector()
+                mindsweep_analysis = detector.analyze_mindsweep_coherence(review_data['mindsweep_items'])
+                
+                if mindsweep_analysis['coherence_score'] < 0.5:
+                    session_patterns.append({
+                        'type': 'fragmented_capture',
+                        'severity': 'high' if mindsweep_analysis['coherence_score'] < 0.3 else 'medium',
+                        'topic_switches': mindsweep_analysis['topic_switches']
+                    })
+            
+            # Extract timing patterns if available
+            if timing_data and timing_data.get('focus_metrics'):
+                focus_score = timing_data['focus_metrics'].get('focus_score', 100)
+                if focus_score < 50:
+                    session_patterns.append({
+                        'type': 'low_focus',
+                        'severity': 'high' if focus_score < 30 else 'medium',
+                        'score': focus_score
+                    })
+            
+            # Search for recurring patterns across sessions (if Graphiti available)
+            recurring_patterns = []
+            if self.graphiti_client:
+                try:
+                    # Search for similar patterns in last 4 weeks
+                    search_query = "ADHD pattern fragmented OR low_focus OR task_switch"
+                    results = await self.search_with_context(search_query, num_results=10)
+                    
+                    # Count pattern frequencies
+                    pattern_counts = {}
+                    for result in results:
+                        if hasattr(result, 'metadata') and result.metadata:
+                            pattern_type = result.metadata.get('pattern_type')
+                            if pattern_type:
+                                pattern_counts[pattern_type] = pattern_counts.get(pattern_type, 0) + 1
+                    
+                    # Find patterns that appear 3+ times
+                    for pattern_type, count in pattern_counts.items():
+                        if count >= 3:
+                            recurring_patterns.append({
+                                'pattern': pattern_type,
+                                'frequency': count,
+                                'recommendation': self._get_pattern_recommendation(pattern_type)
+                            })
+                except Exception as e:
+                    logger.warning(f"Failed to search recurring patterns: {e}")
+            
+            # Build context for next session
+            next_context = {
+                'last_session_date': datetime.now(timezone.utc).isoformat(),
+                'last_session_patterns': session_patterns[:3],  # Top 3 patterns
+                'recurring_patterns': recurring_patterns[:3],  # Top 3 recurring
+                'last_focus_score': timing_data['focus_metrics'].get('focus_score') if timing_data else None,
+                'items_captured': review_data.get('items_captured', 0),
+                'generated_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Save to JSON for instant loading next time
+            context_file = get_base_dir() / '.next_session_context.json'
+            context_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(context_file, 'w') as f:
+                json.dump(next_context, f, indent=2)
+            
+            elapsed = time.perf_counter() - start_time
+            logger.info(f"✅ Prepared next session context in {elapsed:.2f}s")
+            
+        except Exception as e:
+            logger.error(f"Failed to prepare next session context: {e}")
+            # Don't raise - this is non-critical background work
+    
+    async def get_startup_context(self) -> Optional[str]:
+        """
+        Get pre-computed context for session startup
+        Returns formatted string ready for display, or None if not available
+        Designed to complete in < 1 second for zero-friction startup
+        
+        Returns:
+            Formatted context string or None
+        """
+        try:
+            import time
+            start_time = time.perf_counter()
+            
+            # Load pre-computed context
+            context_file = get_base_dir() / '.next_session_context.json'
+            
+            if not context_file.exists():
+                logger.debug("No pre-computed context available")
+                return None
+            
+            with open(context_file, 'r') as f:
+                context = json.load(f)
+            
+            # Check if context is stale (> 2 weeks old)
+            generated_at = datetime.fromisoformat(context['generated_at'].replace('Z', '+00:00'))
+            age_days = (datetime.now(timezone.utc) - generated_at).days
+            
+            if age_days > 14:
+                logger.debug(f"Context is {age_days} days old, skipping")
+                return None
+            
+            # Format for display
+            lines = []
+            
+            # Show recurring patterns if any
+            if context.get('recurring_patterns'):
+                lines.append("\n💭 On your mind lately:")
+                for pattern in context['recurring_patterns'][:3]:
+                    lines.append(f"   • {pattern['pattern']} (seen {pattern['frequency']} times)")
+                    if pattern.get('recommendation'):
+                        lines.append(f"     → {pattern['recommendation']}")
+            
+            # Show last session insights if recent
+            if age_days <= 7 and context.get('last_session_patterns'):
+                lines.append("\n📊 Last session patterns:")
+                for pattern in context['last_session_patterns'][:2]:
+                    if pattern['type'] == 'fragmented_capture':
+                        lines.append(f"   • High topic switching ({pattern['topic_switches']} switches)")
+                    elif pattern['type'] == 'low_focus':
+                        lines.append(f"   • Focus challenges (score: {pattern['score']})")
+            
+            # Performance check
+            elapsed = time.perf_counter() - start_time
+            if elapsed > 1.0:
+                logger.warning(f"⚠️ Startup context took {elapsed:.2f}s (target < 1s)")
+            else:
+                logger.debug(f"Loaded startup context in {elapsed:.3f}s")
+            
+            return "\n".join(lines) if lines else None
+            
+        except Exception as e:
+            logger.warning(f"Failed to load startup context: {e}")
+            return None
+    
+    def _get_pattern_recommendation(self, pattern_type: str) -> str:
+        """Get recommendation for a specific pattern type"""
+        recommendations = {
+            'fragmented_capture': 'Try capturing by context (@computer, @home)',
+            'low_focus': 'Consider shorter sessions or more breaks',
+            'task_switch': 'Batch similar items together',
+            'rushed_completion': 'Front-load important items',
+            'confusion_expression': 'Break complex items into smaller pieces'
+        }
+        return recommendations.get(pattern_type, '')
 
 
 class GraphitiRetriever:

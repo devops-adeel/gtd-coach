@@ -908,15 +908,25 @@ class GTDCoach:
             # Continue anyway with JSON backup
         
         # Load and display pre-computed context (instant, zero-friction)
-        if self.memory_patterns:
+        # Try new GraphitiMemory context first, fallback to memory_patterns
+        context_displayed = False
+        try:
+            startup_context = self.loop.run_until_complete(self.memory.get_startup_context())
+            if startup_context:
+                print(startup_context)
+                print()  # Add spacing
+                context_displayed = True
+        except Exception as e:
+            self.logger.debug(f"Could not load Graphiti context: {e}")
+        
+        # Fallback to memory_patterns if no Graphiti context
+        if not context_displayed and self.memory_patterns:
             context = self.memory_patterns.load_context()
-        else:
-            context = None
-        if context and context.get('patterns'):
-            print("\n💭 On your mind lately:")
-            for pattern in context['patterns'][:3]:  # Show top 3 patterns
-                print(f"   • {pattern['pattern']} (seen {pattern['weeks_seen']} weeks)")
-            print()  # Add spacing
+            if context and context.get('patterns'):
+                print("\n💭 On your mind lately:")
+                for pattern in context['patterns'][:3]:  # Show top 3 patterns
+                    print(f"   • {pattern['pattern']} (seen {pattern['weeks_seen']} weeks)")
+                print()  # Add spacing
         
         # Start fetching Timing data asynchronously if configured
         if self.timing_api.is_configured():
