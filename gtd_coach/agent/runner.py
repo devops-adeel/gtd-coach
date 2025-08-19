@@ -51,14 +51,17 @@ class GTDAgentRunner:
         self.memory = GraphitiMemory(session_id=self.session_id)
         self.pattern_detector = ADHDPatternDetector()
         
-        # Set tools on agent - try ALL_TOOLS now that state injection is fixed
-        try:
-            self.agent.set_tools(ALL_TOOLS)
-            logger.info(f"Using full tool set ({len(ALL_TOOLS)} tools)")
-        except Exception as e:
-            logger.warning(f"Failed to use full tool set: {e}")
-            logger.warning(f"Falling back to essential tools ({len(ESSENTIAL_TOOLS)} tools)")
-            self.agent.set_tools(ESSENTIAL_TOOLS)
+        # Use minimal tools for debugging
+        from langchain_core.tools import tool
+        
+        @tool
+        def test_tool(query: str) -> str:
+            """Test tool for debugging"""
+            return f"Test response: {query}"
+        
+        # Start with just one tool to debug
+        self.agent.set_tools([test_tool])
+        logger.info("Using minimal test tool for debugging")
         
         logger.info(f"Initialized GTD Agent Runner - Session: {self.session_id}")
     
