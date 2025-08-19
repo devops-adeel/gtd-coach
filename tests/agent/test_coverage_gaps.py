@@ -592,8 +592,8 @@ class TestADHDFeatureGaps:
             assert min_expected <= score <= max_expected
 
 
-class TestTimingIntegrationGaps:
-    """Test timing integration paths that were uncovered"""
+class TestTimingAPIGaps:
+    """Test timing API paths that were uncovered"""
     
     def test_phase_timer_edge_cases(self):
         """Test PhaseTimer with edge cases"""

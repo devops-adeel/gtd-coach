@@ -38,7 +38,8 @@ RUN pip install --no-cache-dir \
     pytest-json-report \
     pytest-cov \
     pytest-timeout \
-    pytest-env
+    pytest-env \
+    pytest-benchmark
 
 # Stage 3: Application
 FROM dependencies AS app

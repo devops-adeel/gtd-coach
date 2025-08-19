@@ -13,7 +13,7 @@ from langgraph.graph import StateGraph, END, START
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.types import Command
 # Use SQLite in-memory for checkpointing
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import InMemorySaver
 # RetryPolicy is now configured differently in v0.6
 
 # Import state and tools
@@ -96,12 +96,6 @@ class DailyCaptureWorkflow:
             handle_tool_errors=True
         )
         workflow.add_node("tools", tool_node)
-        
-        # Add retry policy for critical nodes
-        retry_policy = RetryPolicy(
-            max_attempts=3,
-            retry_on=[ConnectionError, TimeoutError]
-        )
         
         # Define the flow with conditional edges
         workflow.add_edge(START, "startup")

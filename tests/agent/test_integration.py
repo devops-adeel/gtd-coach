@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 
 from gtd_coach.agent import GTDAgent, create_daily_capture_agent
-from gtd_coach.integrations.timing import TimingIntegration
 from gtd_coach.integrations.graphiti import GraphitiMemory
 
 

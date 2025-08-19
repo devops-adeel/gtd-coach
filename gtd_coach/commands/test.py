@@ -76,14 +76,14 @@ def timing():
         sys.exit(1)
     
     try:
-        from gtd_coach.integrations.timing import TimingIntegration
+        from gtd_coach.integrations.timing import TimingAPI
         
-        async def test_api():
-            timing = TimingIntegration(api_key)
+        def test_api():
+            timing = TimingAPI(api_key)
             
             # Test with a simple request
             try:
-                projects = await timing.get_projects()
+                projects = timing.fetch_projects_last_week()
                 click.echo(f"✅ Connected to Timing API")
                 click.echo(f"   Found {len(projects)} projects")
                 
@@ -98,7 +98,7 @@ def timing():
                 click.echo(f"❌ API call failed: {e}", err=True)
                 return False
         
-        success = asyncio.run(test_api())
+        success = test_api()
         sys.exit(0 if success else 1)
         
     except ImportError as e:
