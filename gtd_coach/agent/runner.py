@@ -45,8 +45,12 @@ class GTDAgentRunner:
         self.user_id = datetime.now().strftime("%G-W%V")  # Weekly user ID
         
         # Initialize components with correct LM Studio URL and model
-        lm_studio_url = os.getenv('LM_STUDIO_URL', 'http://host.docker.internal:1234/v1')
+        # Fix: Ensure /v1 is included in the URL
+        lm_studio_url = os.getenv('LM_STUDIO_URL', 'http://host.docker.internal:1234')
+        if not lm_studio_url.endswith('/v1'):
+            lm_studio_url = f"{lm_studio_url}/v1"
         model_name = os.getenv('LM_STUDIO_MODEL', 'meta-llama-3.1-8b-instruct')
+        logger.info(f"Configuring LM Studio: URL={lm_studio_url}, Model={model_name}")
         self.agent = GTDAgent(lm_studio_url=lm_studio_url, model_name=model_name)
         self.memory = GraphitiMemory(session_id=self.session_id)
         self.pattern_detector = ADHDPatternDetector()

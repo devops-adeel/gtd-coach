@@ -165,6 +165,16 @@ class GTDAgent:
         if not self.tools:
             raise ValueError("Tools must be set before creating agent")
         
+        # Test LLM directly before creating agent
+        logger.info("Testing LLM connection before creating agent...")
+        try:
+            from langchain_core.messages import HumanMessage
+            test_response = self.llm.invoke([HumanMessage(content="Say 'OK'")])
+            logger.info(f"LLM test successful: {test_response.content[:50]}")
+        except Exception as e:
+            logger.error(f"LLM test failed: {e}")
+            raise
+        
         # Create agent with tools (V2 tools don't need state injection)
         self.agent = create_react_agent(
             self.llm,
