@@ -43,8 +43,8 @@ class TestCheckpointerImplementations:
     @pytest.fixture(params=[
         "memory",
         "sqlite",
-        "postgres",
-        "redis"
+        pytest.param("postgres", marks=pytest.mark.skipif(PostgresSaver is None, reason="PostgresSaver not installed")),
+        pytest.param("redis", marks=pytest.mark.skipif(RedisSaver is None, reason="RedisSaver not installed"))
     ])
     def checkpointer(self, request):
         """Parameterized fixture for all checkpointer types"""
@@ -58,24 +58,26 @@ class TestCheckpointerImplementations:
             return SqliteSaver.from_conn_string(":memory:")
         
         elif checkpointer_type == "postgres":
+            # Skip if not installed
+            if PostgresSaver is None:
+                pytest.skip("PostgresSaver not installed")
             # Mock PostgreSQL for unit tests
-            with patch('langgraph.checkpoint.postgres.PostgresSaver') as mock_pg:
-                mock_saver = MagicMock()
-                mock_saver.get = MagicMock(return_value=None)
-                mock_saver.put = MagicMock()
-                mock_saver.list = MagicMock(return_value=[])
-                mock_pg.return_value = mock_saver
-                return mock_saver
+            mock_saver = MagicMock()
+            mock_saver.get = MagicMock(return_value=None)
+            mock_saver.put = MagicMock()
+            mock_saver.list = MagicMock(return_value=[])
+            return mock_saver
         
         elif checkpointer_type == "redis":
+            # Skip if not installed
+            if RedisSaver is None:
+                pytest.skip("RedisSaver not installed")
             # Mock Redis for unit tests
-            with patch('langgraph.checkpoint.redis.RedisSaver') as mock_redis:
-                mock_saver = MagicMock()
-                mock_saver.get = MagicMock(return_value=None)
-                mock_saver.put = MagicMock()
-                mock_saver.list = MagicMock(return_value=[])
-                mock_redis.return_value = mock_saver
-                return mock_saver
+            mock_saver = MagicMock()
+            mock_saver.get = MagicMock(return_value=None)
+            mock_saver.put = MagicMock()
+            mock_saver.list = MagicMock(return_value=[])
+            return mock_saver
     
     def test_save_and_retrieve_checkpoint(self, checkpointer):
         """Test basic save and retrieve operations"""
