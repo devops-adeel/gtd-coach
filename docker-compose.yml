@@ -7,13 +7,15 @@ services:
       target: production
     image: gtd-coach:latest
     container_name: gtd-coach-app
+    labels:
+      - "dev.orbstack.domains=gtd-coach.local"
     environment:
-      # LM Studio configuration
-      - LM_STUDIO_URL=http://host.docker.internal:1234
+      # LM Studio configuration (OrbStack)
+      - LM_STUDIO_URL=http://host.orb.internal:1234
       - LM_STUDIO_MODEL=meta-llama-3.1-8b-instruct
       
-      # Langfuse configuration (optional)
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://host.docker.internal:3000}
+      # Langfuse configuration (OrbStack compose domain)
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse-web.langfuse-prod.orb.local}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       
@@ -21,9 +23,9 @@ services:
       - TIMING_API_KEY=${TIMING_API_KEY:-}
       - TIMING_MIN_MINUTES=${TIMING_MIN_MINUTES:-30}
       
-      # FalkorDB configuration for Graphiti
-      - FALKORDB_HOST=${FALKORDB_HOST:-host.docker.internal}
-      - FALKORDB_PORT=${FALKORDB_PORT:-6380}
+      # FalkorDB configuration for Graphiti (OrbStack)
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb.local}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-shared_gtd_knowledge}
       - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-shared_knowledge}
       - GRAPHITI_ENABLED=${GRAPHITI_ENABLED:-true}
@@ -55,11 +57,13 @@ services:
       target: testing
     image: gtd-coach:test
     container_name: gtd-coach-tests
+    labels:
+      - "dev.orbstack.domains=gtd-coach-tests.local"
     environment:
       - TEST_MODE=true
       - MOCK_EXTERNAL_APIS=${MOCK_EXTERNAL_APIS:-true}
-      - FALKORDB_HOST=host.docker.internal
-      - FALKORDB_PORT=6380
+      - FALKORDB_HOST=falkordb.local
+      - FALKORDB_PORT=6379
       - FALKORDB_DATABASE=shared_gtd_knowledge_test
       - GRAPHITI_GROUP_ID=test_group
       - PYTHONPATH=/app
@@ -82,12 +86,14 @@ services:
       target: development
     image: gtd-coach:dev
     container_name: gtd-coach-dev
+    labels:
+      - "dev.orbstack.domains=gtd-coach-dev.local"
     environment:
       - ENVIRONMENT=development
       - DEBUG=true
-      - LM_STUDIO_URL=http://host.docker.internal:1234
-      - FALKORDB_HOST=host.docker.internal
-      - FALKORDB_PORT=6380
+      - LM_STUDIO_URL=http://host.orb.internal:1234
+      - FALKORDB_HOST=falkordb.local
+      - FALKORDB_PORT=6379
       - FALKORDB_DATABASE=shared_gtd_knowledge
       - GRAPHITI_GROUP_ID=shared_knowledge
       - PYTHONPATH=/app
@@ -110,9 +116,11 @@ services:
       target: production
     image: gtd-coach:latest
     container_name: gtd-coach-langfuse-test
+    labels:
+      - "dev.orbstack.domains=gtd-coach-langfuse-test.local"
     environment:
-      - LM_STUDIO_URL=http://host.docker.internal:1234
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://host.docker.internal:3000}
+      - LM_STUDIO_URL=http://host.orb.internal:1234
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse-web.langfuse-prod.orb.local}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - PYTHONPATH=/app
@@ -134,10 +142,12 @@ services:
       target: production
     image: gtd-coach:latest
     container_name: gtd-coach-summary
+    labels:
+      - "dev.orbstack.domains=gtd-coach-summary.local"
     environment:
-      - LM_STUDIO_URL=http://host.docker.internal:1234
-      - FALKORDB_HOST=host.docker.internal
-      - FALKORDB_PORT=6380
+      - LM_STUDIO_URL=http://host.orb.internal:1234
+      - FALKORDB_HOST=falkordb.local
+      - FALKORDB_PORT=6379
       - FALKORDB_DATABASE=shared_gtd_knowledge
       - GRAPHITI_GROUP_ID=shared_knowledge
       - PYTHONPATH=/app

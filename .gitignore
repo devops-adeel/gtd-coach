@@ -59,6 +59,7 @@ validation_results.json
 .env.local
 .env.test
 .env.graphiti
+.env.orbstack
 langfuse_tracker.py
 
 # Docker
