@@ -5,19 +5,24 @@ Test script for GTD Coach - non-interactive verification
 
 import requests
 import json
+import os
 from pathlib import Path
 
 # Configuration
 API_URL = "http://localhost:1234/v1/chat/completions"
 MODEL_NAME = "meta-llama-3.1-8b-instruct"
-PROMPTS_DIR = Path.home() / "gtd-coach" / "prompts"
+# Use relative path or environment variable
+if os.getenv('IN_DOCKER'):
+    PROMPTS_DIR = Path("/root/gtd-coach/config/prompts")
+else:
+    PROMPTS_DIR = Path(__file__).parent.parent / "config" / "prompts"
 
 def test_llm_connection():
     """Test basic LLM connectivity"""
     print("Testing LLM connection...")
     
     # Load system prompt
-    with open(PROMPTS_DIR / "system-prompt.txt", 'r') as f:
+    with open(PROMPTS_DIR / "system.txt", 'r') as f:
         system_prompt = f.read()
     
     messages = [

@@ -25,7 +25,7 @@ async def test_retry_logic():
     print("TEST 1: RETRY LOGIC WITH EXPONENTIAL BACKOFF")
     print("="*60)
     
-    from graphiti_integration import GraphitiMemory
+    from gtd_coach.integrations.graphiti import GraphitiMemory
     
     # Create a memory instance
     memory = GraphitiMemory(session_id="test_retry_20250810")
@@ -75,7 +75,7 @@ async def test_excluded_entities():
     print("TEST 2: EXCLUDED ENTITIES CONFIGURATION")
     print("="*60)
     
-    from gtd_entity_config import (
+    from gtd_coach.integrations.gtd_entity_config import (
         get_entity_config_for_episode,
         EXCLUDED_ENTITIES_BY_EPISODE
     )
@@ -111,7 +111,7 @@ async def test_performance_metrics():
     print("TEST 3: PERFORMANCE METRICS TRACKING")
     print("="*60)
     
-    from graphiti_integration import GraphitiMemory
+    from gtd_coach.integrations.graphiti import GraphitiMemory
     
     # Create memory instance
     memory = GraphitiMemory(session_id="test_metrics_20250810")
@@ -165,7 +165,7 @@ async def test_error_context_logging():
     print("TEST 4: ERROR CONTEXT LOGGING")
     print("="*60)
     
-    from graphiti_integration import GraphitiMemory
+    from gtd_coach.integrations.graphiti import GraphitiMemory
     import logging
     
     # Create memory instance
@@ -231,7 +231,7 @@ async def test_cost_optimization():
     print("TEST 5: COST OPTIMIZATION (SKIP TRIVIAL & BATCHING)")
     print("="*60)
     
-    from graphiti_integration import GraphitiMemory
+    from gtd_coach.integrations.graphiti import GraphitiMemory
     
     # Create memory with skip_trivial enabled
     memory = GraphitiMemory(session_id="test_cost_20250810")

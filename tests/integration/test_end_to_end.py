@@ -156,7 +156,7 @@ def test_summary_generation():
     print("\n📊 Testing summary generation...")
     print("-" * 50)
     
-    cmd = ["./docker-run.sh", "summary"]
+    cmd = ["./scripts/deployment/docker-run.sh", "summary"]
     result = subprocess.run(cmd, capture_output=True, text=True)
     
     if result.returncode == 0:

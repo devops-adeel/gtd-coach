@@ -200,9 +200,9 @@ def test_fallback_behavior():
     print(f"\n{BLUE}Test 7: Fallback Behavior{RESET}")
     
     # Check if local prompt files exist
-    prompts_dir = Path.home() / "gtd-coach" / "prompts"
-    simple_prompt = prompts_dir / "system-prompt-simple.txt"
-    full_prompt = prompts_dir / "system-prompt.txt"
+    prompts_dir = Path.home() / "gtd-coach" / "config" / "prompts"
+    simple_prompt = prompts_dir / "simple.txt"
+    full_prompt = prompts_dir / "system.txt"
     
     if simple_prompt.exists():
         print(f"{GREEN}✓ Simple prompt file exists (fallback ready){RESET}")
