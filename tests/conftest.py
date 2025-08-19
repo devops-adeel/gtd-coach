@@ -319,6 +319,60 @@ def capture_logs():
     root_logger.removeHandler(handler)
 
 
+# ==================== Auto-Applied External Service Mocks ====================
+
+@pytest.fixture(autouse=True)
+def mock_external_services(request):
+    """Automatically mock external services for all tests except integration tests."""
+    # Skip mocking for integration tests that need real services
+    if hasattr(request, 'node'):
+        markers = request.node.iter_markers()
+        if any(marker.name in ['requires_falkordb', 'requires_api_keys', 'integration'] for marker in markers):
+            return
+    
+    with patch('requests.post') as mock_post, \
+         patch('langfuse.Langfuse') as mock_langfuse_cls, \
+         patch('gtd_coach.integrations.timing.TimingAPI') as mock_timing_cls:
+        
+        # Mock LM Studio responses
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json = Mock(return_value={
+            'choices': [{
+                'message': {
+                    'content': 'Mock LLM response for testing'
+                }
+            }]
+        })
+        mock_post.return_value = mock_response
+        
+        # Mock Langfuse client
+        mock_langfuse = Mock()
+        mock_langfuse.trace = Mock(return_value=Mock(id="test-trace-id"))
+        mock_langfuse.score = Mock()
+        mock_langfuse.get_prompt = Mock(return_value=Mock(
+            compile=Mock(return_value="Test prompt"),
+            config={"model": "test-model"}
+        ))
+        mock_langfuse_cls.return_value = mock_langfuse
+        
+        # Mock Timing API
+        mock_timing = Mock()
+        mock_timing.is_configured = Mock(return_value=False)
+        mock_timing.fetch_projects_last_week = Mock(return_value=[])
+        mock_timing.fetch_time_entries_last_week = Mock(return_value=[])
+        mock_timing.detect_context_switches = Mock(return_value={
+            'total_switches': 0,
+            'switches_per_hour': 0,
+            'switch_patterns': [],
+            'focus_periods': [],
+            'scatter_periods': []
+        })
+        mock_timing_cls.return_value = mock_timing
+        
+        yield
+
+
 # ==================== Skip Markers ====================
 
 def pytest_configure(config):
