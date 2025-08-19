@@ -69,6 +69,10 @@ class GraphitiMemory:
         }
         self.entity_type_metrics: Dict[str, float] = {}  # Track avg time per entity type
         
+    def is_configured(self) -> bool:
+        """Check if Graphiti is configured and available"""
+        return self.graphiti_client is not None
+    
     async def initialize(self):
         """Initialize Graphiti connection if available"""
         if GRAPHITI_AVAILABLE and os.getenv('GRAPHITI_ENABLED', 'true').lower() == 'true':

@@ -41,7 +41,9 @@ def save_memory_tool(
     Returns:
         Dictionary with save status and episode ID
     """
-    memory = GraphitiMemory()
+    # Get session_id from state or use a default
+    session_id = state.get('session_id') if state else datetime.now().strftime('%Y%m%d_%H%M%S')
+    memory = GraphitiMemory(session_id)
     
     if not memory.is_configured():
         # Fallback to JSON file storage
@@ -103,7 +105,9 @@ def load_context_tool(
     Returns:
         Dictionary with user context and patterns
     """
-    memory = GraphitiMemory()
+    # Get session_id from state or use a default
+    session_id = state.get('session_id') if state else datetime.now().strftime('%Y%m%d_%H%M%S')
+    memory = GraphitiMemory(session_id)
     
     if not memory.is_configured():
         return _load_from_json_fallback(user_id, state)
@@ -177,7 +181,9 @@ def search_memory_tool(
     Returns:
         Dictionary with search results
     """
-    memory = GraphitiMemory()
+    # Get session_id from state or use a default
+    session_id = state.get('session_id') if state else datetime.now().strftime('%Y%m%d_%H%M%S')
+    memory = GraphitiMemory(session_id)
     
     if not memory.is_configured():
         return {
@@ -253,7 +259,9 @@ def update_user_context_tool(
     Returns:
         Dictionary with update status
     """
-    memory = GraphitiMemory()
+    # Get session_id from state or use a default
+    session_id = state.get('session_id') if state else datetime.now().strftime('%Y%m%d_%H%M%S')
+    memory = GraphitiMemory(session_id)
     
     if not memory.is_configured():
         return _update_json_context(updates, state)
