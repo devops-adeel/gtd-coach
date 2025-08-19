@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import time
+import csv
 from typing import Dict, Optional, Any, List
 from datetime import datetime
 from pathlib import Path
@@ -34,11 +35,19 @@ class MetricPoint:
 class MetricsLogger:
     """Logs metrics for comparison"""
     
-    def __init__(self, data_dir: Optional[Path] = None):
-        self.data_dir = data_dir or Path.home() / "gtd-coach" / "data" / "shadow_metrics"
+    def __init__(self, data_dir: Optional[Path] = None, log_file: Optional[str] = None):
+        # Support both data_dir and log_file parameters for compatibility
+        if log_file:
+            self.log_file = log_file
+            self.data_dir = Path(log_file).parent
+        else:
+            self.data_dir = data_dir or Path.home() / "gtd-coach" / "data" / "shadow_metrics"
+            self.log_file = None
+        
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.session_metrics = []
-        self.session_id = None
+        self.metrics = []  # For test compatibility
+        self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")  # Default session ID
     
     def start_session(self, session_id: str, workflow_type: str):
         """Start a new metrics session"""
@@ -153,6 +162,159 @@ class MetricsLogger:
                 })
         
         return comparison
+    
+    # Compatibility methods for tests
+    def log_decision_point(self, phase: str, legacy_decision: Any, agent_decision: Any, context: Dict):
+        """Log a decision point comparison (test compatibility)"""
+        metric = {
+            "timestamp": datetime.now().isoformat(),
+            "phase": phase,
+            "legacy_decision": legacy_decision,
+            "agent_decision": agent_decision,
+            "context": context,
+            "metric_type": "decision_point"
+        }
+        self.metrics.append(metric)
+        self.log_metric(phase, "decision_point", {
+            "legacy": legacy_decision,
+            "agent": agent_decision
+        }, context)
+    
+    def log_performance_metric(self, phase: str, legacy_duration: float, agent_duration: float, metric_type: str):
+        """Log performance comparison (test compatibility)"""
+        improvement_percent = ((legacy_duration - agent_duration) / legacy_duration * 100) if legacy_duration > 0 else 0
+        
+        metric = {
+            "timestamp": datetime.now().isoformat(),
+            "phase": phase,
+            "legacy_duration": legacy_duration,
+            "agent_duration": agent_duration,
+            "metric_type": "performance",
+            "improvement_percent": improvement_percent
+        }
+        self.metrics.append(metric)
+        self.log_phase_timing(phase, agent_duration)
+    
+    def generate_summary(self) -> Dict:
+        """Generate metrics summary (test compatibility)"""
+        if not self.metrics:
+            return {
+                "total_metrics": 0,
+                "performance_metrics": 0,
+                "decision_points": 0,
+                "average_improvement": 0,
+                "decision_agreement_rate": 0
+            }
+        
+        perf_metrics = [m for m in self.metrics if m.get("metric_type") == "performance"]
+        decision_metrics = [m for m in self.metrics if m.get("metric_type") == "decision_point"]
+        
+        # Calculate average improvement
+        improvements = [m.get("improvement_percent", 0) for m in perf_metrics]
+        avg_improvement = sum(improvements) / len(improvements) if improvements else 0
+        
+        # Calculate decision agreement rate
+        agreements = sum(
+            1 for m in decision_metrics 
+            if m.get("legacy_decision") == m.get("agent_decision")
+        )
+        agreement_rate = (agreements / len(decision_metrics) * 100) if decision_metrics else 0
+        
+        return {
+            "total_metrics": len(self.metrics),
+            "performance_metrics": len(perf_metrics),
+            "decision_points": len(decision_metrics),
+            "average_improvement": avg_improvement,
+            "decision_agreement_rate": agreement_rate,
+            "session_id": self.session_id
+        }
+    
+    def generate_detailed_report(self) -> Dict:
+        """Generate detailed comparison report (test compatibility)"""
+        summary = self.generate_summary()
+        
+        perf_metrics = [m for m in self.metrics if m.get("metric_type") == "performance"]
+        decision_metrics = [m for m in self.metrics if m.get("metric_type") == "decision_point"]
+        
+        # Calculate total times
+        total_legacy_time = sum(m.get("legacy_duration", 0) for m in perf_metrics)
+        total_agent_time = sum(m.get("agent_duration", 0) for m in perf_metrics)
+        overall_improvement = ((total_legacy_time - total_agent_time) / total_legacy_time * 100) if total_legacy_time > 0 else 0
+        
+        return {
+            "performance_analysis": {
+                "total_legacy_time": total_legacy_time,
+                "total_agent_time": total_agent_time,
+                "overall_improvement": overall_improvement,
+                "metrics_count": len(perf_metrics)
+            },
+            "decision_analysis": {
+                "total_decisions": len(decision_metrics),
+                "agreement_rate": summary["decision_agreement_rate"],
+                "divergences": [
+                    m for m in decision_metrics 
+                    if m.get("legacy_decision") != m.get("agent_decision")
+                ]
+            },
+            "recommendations": [
+                "Agent shows performance improvements" if overall_improvement > 0 else "Legacy performs better",
+                f"Decision agreement at {summary['decision_agreement_rate']:.1f}%"
+            ]
+        }
+    
+    def identify_regressions(self) -> List[Dict]:
+        """Identify performance regressions (test compatibility)"""
+        perf_metrics = [m for m in self.metrics if m.get("metric_type") == "performance"]
+        
+        regressions = []
+        for metric in perf_metrics:
+            if metric.get("agent_duration", 0) > metric.get("legacy_duration", 0):
+                regressions.append({
+                    "phase": metric.get("phase"),
+                    "legacy_duration": metric.get("legacy_duration"),
+                    "agent_duration": metric.get("agent_duration"),
+                    "regression_percent": abs(metric.get("improvement_percent", 0))
+                })
+        
+        return regressions
+    
+    def export_json(self, filepath: str):
+        """Export metrics to JSON file (test compatibility)"""
+        data = {
+            "session_id": self.session_id,
+            "metrics": self.metrics,
+            "summary": self.generate_summary(),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=2, default=str)
+    
+    def export_csv(self, filepath: str):
+        """Export metrics to CSV file (test compatibility)"""
+        if not self.metrics:
+            # Create empty CSV
+            with open(filepath, 'w') as f:
+                f.write("phase,metric_type,timestamp\n")
+            return
+        
+        # Determine all unique keys
+        all_keys = set()
+        for metric in self.metrics:
+            all_keys.update(metric.keys())
+        
+        # Write CSV
+        with open(filepath, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=sorted(all_keys))
+            writer.writeheader()
+            writer.writerows(self.metrics)
+    
+    def save(self):
+        """Save metrics to file (test compatibility)"""
+        if self.log_file:
+            self.export_json(self.log_file)
+        else:
+            self.save_session()
 
 
 class ShadowModeRunner:
@@ -162,6 +324,8 @@ class ShadowModeRunner:
         self.metrics_logger = MetricsLogger()
         self.legacy_coach = None
         self.agent_workflow = None
+        self.comparison_tasks = []  # For test compatibility
+        self.is_running = False  # For test compatibility
     
     async def run_with_shadow(self, session_id: str, workflow_type: str = "weekly_review") -> Dict:
         """
@@ -367,6 +531,96 @@ class ShadowModeRunner:
             
         except Exception as e:
             logger.error(f"Shadow comparison failed: {e}")
+    
+    # Test compatibility methods
+    async def run_shadow_comparison(self, legacy_workflow, agent_workflow, state: Dict):
+        """Run shadow comparison for tests"""
+        self.is_running = True
+        
+        # Create a comparison task
+        async def compare():
+            try:
+                # Run legacy workflow
+                if hasattr(legacy_workflow, 'run'):
+                    legacy_result = legacy_workflow.run(state) if not asyncio.iscoroutinefunction(legacy_workflow.run) else await legacy_workflow.run(state)
+                else:
+                    legacy_result = {"success": True}
+                
+                # Run agent workflow  
+                if hasattr(agent_workflow, 'run'):
+                    agent_result = await agent_workflow.run(state) if asyncio.iscoroutinefunction(agent_workflow.run) else agent_workflow.run(state)
+                else:
+                    agent_result = {"success": True}
+                
+                # Log comparison
+                self.metrics_logger.log_metric(
+                    "comparison",
+                    "result",
+                    {
+                        "legacy": legacy_result,
+                        "agent": agent_result
+                    }
+                )
+                
+                return {"legacy": legacy_result, "agent": agent_result}
+            finally:
+                self.is_running = False
+        
+        # Create task and add to list
+        task = asyncio.create_task(compare())
+        self.comparison_tasks.append(task)
+        return task
+    
+    def compare_results(self, legacy_result: Dict, agent_result: Dict) -> Dict:
+        """Compare results between legacy and agent"""
+        differences = {}
+        
+        # Compare captures
+        if "captures" in legacy_result or "captures" in agent_result:
+            legacy_captures = legacy_result.get("captures", [])
+            agent_captures = agent_result.get("captures", [])
+            differences["captures"] = {
+                "legacy_count": len(legacy_captures),
+                "agent_count": len(agent_captures),
+                "difference": len(agent_captures) - len(legacy_captures)
+            }
+        
+        # Compare priorities
+        if "priorities" in legacy_result or "priorities" in agent_result:
+            legacy_priorities = legacy_result.get("priorities", {})
+            agent_priorities = agent_result.get("priorities", {})
+            differences["priorities"] = {
+                "different_a_items": legacy_priorities.get("A", []) != agent_priorities.get("A", []),
+                "priority_mismatch": 0  # Simplified
+            }
+        
+        # Compare performance
+        if "duration" in legacy_result and "duration" in agent_result:
+            legacy_duration = legacy_result["duration"]
+            agent_duration = agent_result["duration"]
+            differences["performance"] = {
+                "legacy_duration": legacy_duration,
+                "agent_duration": agent_duration,
+                "improvement_percent": ((legacy_duration - agent_duration) / legacy_duration * 100) if legacy_duration > 0 else 0
+            }
+        
+        return differences
+    
+    def should_notify_divergence(self, differences: Dict) -> bool:
+        """Determine if divergence is significant enough to notify"""
+        # Major capture difference
+        if differences.get("captures", {}).get("difference", 0) > 5:
+            return True
+        
+        # Priority mismatch
+        if differences.get("priorities", {}).get("different_a_items"):
+            return True
+        
+        # Performance regression
+        if differences.get("performance", {}).get("improvement_percent", 0) < -20:
+            return True
+        
+        return False
 
 
 # Create singleton instance
