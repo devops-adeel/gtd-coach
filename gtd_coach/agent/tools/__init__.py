@@ -375,8 +375,7 @@ ESSENTIAL_TOOLS = [
     # Core GTD (2)
     clarify_items_tool,
     prioritize_actions_tool,
-    # Core interaction (2)
-    structured_input_tool,
+    # Core interaction (1) - removed structured_input_tool as it uses old InjectedState
     show_progress_tool,
     # Core memory (1)
     save_memory_tool,
