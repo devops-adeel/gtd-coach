@@ -64,6 +64,86 @@ def event_loop():
     loop.close()
 
 
+# ==================== LangGraph v0.6 Support ====================
+
+@pytest.fixture
+def langgraph_config():
+    """Provide proper LangGraph configuration for tests."""
+    import uuid
+    return {
+        "configurable": {
+            "thread_id": str(uuid.uuid4()),
+            "checkpoint_ns": "test"
+        }
+    }
+
+
+@pytest.fixture
+def mock_checkpointer():
+    """Provide InMemorySaver for tests requiring checkpointing."""
+    with patch('langgraph.checkpoint.memory.InMemorySaver') as MockSaver:
+        checkpointer = Mock()
+        checkpointer.get = AsyncMock(return_value=None)
+        checkpointer.put = AsyncMock()
+        checkpointer.list = AsyncMock(return_value=[])
+        MockSaver.return_value = checkpointer
+        yield checkpointer
+
+
+@pytest.fixture
+def mock_tool_with_injected_state():
+    """Create a proper mock tool that handles InjectedState."""
+    from unittest.mock import Mock
+    
+    # Create a mock tool with proper structure
+    mock_tool = Mock()
+    mock_tool.name = "mock_tool"
+    mock_tool.description = "A mock tool for testing"
+    
+    # Mock the invoke method (tools use invoke, not run)
+    mock_tool.invoke = Mock(return_value={"result": "mocked"})
+    
+    # Mock the schema method to hide InjectedState
+    schema = Mock()
+    schema.schema = Mock(return_value={
+        "properties": {
+            "query": {"type": "string", "description": "Query input"}
+        },
+        "required": ["query"]
+    })
+    mock_tool.get_input_schema = Mock(return_value=schema)
+    
+    return mock_tool
+
+
+@pytest.fixture
+def mock_interrupt_result():
+    """Mock result with interrupt for testing interrupt patterns."""
+    return {
+        "messages": [],
+        "__interrupt__": [
+            {
+                "value": {"query": "test interrupt"},
+                "resumable": True,
+                "ns": ["test_node:123"],
+                "when": "during"
+            }
+        ]
+    }
+
+
+@pytest.fixture  
+def mock_command():
+    """Mock Command object for resume testing."""
+    with patch('langgraph.types.Command') as MockCommand:
+        command = Mock()
+        command.resume = "test_resume_value"
+        command.update = {}
+        MockCommand.return_value = command
+        MockCommand.resume = lambda value: MockCommand(resume=value)
+        yield MockCommand
+
+
 # ==================== FalkorDB / Graphiti Mocks ====================
 
 @pytest.fixture

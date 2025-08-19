@@ -19,7 +19,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Send, Command
 try:
-    from langgraph.errors import NodeInterrupt
+    from langgraph.types import interrupt
 except ImportError:
     class NodeInterrupt(Exception):
         pass
@@ -522,7 +522,7 @@ class TestCommandPrimitives:
         checkpointer = MemorySaver()
         
         def interrupt_node(state: Dict) -> Dict:
-            raise NodeInterrupt("User input needed")
+            interrupt("User input needed")
         
         def process_node(state: Dict) -> Dict:
             if "user_response" in state:

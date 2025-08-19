@@ -224,8 +224,12 @@ class TestWeeklyReviewWorkflow:
                     'session_id': 'test_session_123'
                 }
                 
-                # Run workflow
-                result = workflow.run(initial_state)
+                # Compile and run workflow with LangGraph v0.6 API
+                from langgraph.checkpoint.memory import InMemorySaver
+                checkpointer = InMemorySaver()
+                graph = workflow.compile(checkpointer=checkpointer)
+                config = {"configurable": {"thread_id": "test_thread"}}
+                result = graph.invoke(initial_state, config)
                 
                 # Verify all phases completed
                 assert 'STARTUP' in result['completed_phases']
@@ -360,8 +364,14 @@ class TestWorkflowResumption:
                     'session_id': 'test_resume_123'
                 }
                 
+                # Compile and run workflow with checkpointer
+                from langgraph.checkpoint.memory import InMemorySaver
+                checkpointer = InMemorySaver()
+                graph = workflow.compile(checkpointer=checkpointer)
+                config = {"configurable": {"thread_id": "test_interrupt"}}
+                
                 # Run workflow
-                result1 = workflow.run(state)
+                result1 = graph.invoke(state, config)
                 
                 # Verify interrupt marker
                 assert '__interrupt__' in result1
@@ -373,8 +383,9 @@ class TestWorkflowResumption:
                     'current_phase': 'MIND_SWEEP'
                 }
                 
-                # Resume workflow
-                result2 = workflow.run(None, resume=True)
+                # Resume workflow with Command
+                from langgraph.types import Command
+                result2 = graph.invoke(Command(resume="user_input"), config)
                 
                 # Verify resumed from checkpoint
                 assert 'STARTUP' in result2['completed_phases']

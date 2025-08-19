@@ -134,7 +134,7 @@ class TestShadowModeRunner:
     def mock_agent_workflow(self):
         """Mock agent workflow"""
         workflow = AsyncMock()
-        workflow.run = AsyncMock(return_value={
+        workflow.invoke = AsyncMock(return_value={
             "success": True,
             "captures": ["task1", "task2", "task3"],
             "duration": 25.2
@@ -227,7 +227,7 @@ class TestShadowModeRunner:
         workflows = []
         for i in range(3):
             mock_workflow = AsyncMock()
-            mock_workflow.run = AsyncMock(return_value={
+            mock_workflow.invoke = AsyncMock(return_value={
                 "success": True,
                 "id": f"workflow_{i}",
                 "duration": 10 + i

@@ -12,7 +12,7 @@ services:
     environment:
       # LM Studio configuration (OrbStack)
       - LM_STUDIO_URL=http://host.orb.internal:1234
-      - LM_STUDIO_MODEL=meta-llama-3.1-8b-instruct
+      - LM_STUDIO_MODEL=${LM_STUDIO_MODEL:-meta-llama-3.1-8b-instruct}
       
       # Langfuse configuration (OrbStack compose domain)
       - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse-web.langfuse-prod.orb.local}

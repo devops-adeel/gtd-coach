@@ -249,7 +249,12 @@ class TestScalabilityBenchmarks:
                     return {"success": True, "id": s["session_id"]}
                 
                 with patch.object(workflow, 'run', mock_run):
-                    tasks.append(workflow.run(state))
+                    tasks.append(# Compile workflow first
+        from langgraph.checkpoint.memory import InMemorySaver
+        checkpointer = InMemorySaver()
+        graph = workflow.compile(checkpointer=checkpointer)
+        config = {"configurable": {"thread_id": "test_thread"}}
+        result = graph.invoke(state, config))
             
             results = await asyncio.gather(*tasks)
             return results

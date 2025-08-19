@@ -220,7 +220,12 @@ class TestWorkflowIntegration:
         
         # Run workflow
         initial_state = {'test_mode': True}  # Skip memory save
-        result = await workflow_no_agent.run(initial_state)
+        result = await # Compile workflow first
+        from langgraph.checkpoint.memory import InMemorySaver
+        checkpointer = InMemorySaver()
+        graph = workflow_no_agent.compile(checkpointer=checkpointer)
+        config = {"configurable": {"thread_id": "test_thread"}}
+        result = graph.invoke(initial_state, config)
         
         assert 'session_id' in result
         assert 'completed_phases' in result
@@ -237,7 +242,12 @@ class TestWorkflowIntegration:
             
             # Should raise the exception
             with pytest.raises(Exception) as exc_info:
-                await workflow_no_agent.run(initial_state)
+                await # Compile workflow first
+        from langgraph.checkpoint.memory import InMemorySaver
+        checkpointer = InMemorySaver()
+        graph = workflow_no_agent.compile(checkpointer=checkpointer)
+        config = {"configurable": {"thread_id": "test_thread"}}
+        result = graph.invoke(initial_state, config)
             
             assert "Test error" in str(exc_info.value)
 
