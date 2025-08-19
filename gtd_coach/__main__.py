@@ -82,6 +82,9 @@ def main():
     # Default to review if no command specified
     if not args.command:
         args.command = "review"
+        # Add default values for review command attributes
+        args.resume = False
+        args.check_config = False
     
     # Route to appropriate command
     if args.command == "review":
@@ -94,7 +97,7 @@ def main():
         else:
             # Use new LangGraph agent by default
             from gtd_coach.agent.runner import run_weekly_review
-            sys.exit(run_weekly_review(resume=args.resume))
+            sys.exit(run_weekly_review(resume=getattr(args, 'resume', False)))
     
     elif args.command == "setup-timing":
         # Import and run Timing setup
