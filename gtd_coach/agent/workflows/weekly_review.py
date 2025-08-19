@@ -16,7 +16,7 @@ from langgraph.graph import StateGraph, END, START
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
-from langgraph.errors import NodeInterrupt as interrupt
+from langgraph.types import interrupt
 # RetryPolicy is now configured differently in v0.6
 # from langgraph.pregel.retry import RetryPolicy
 
@@ -98,26 +98,28 @@ class WeeklyReviewWorkflow:
     Implements all 5 phases with strict time-boxing
     """
     
-    def __init__(self, llm_client=None):
+    def __init__(self, llm_client=None, **kwargs):
         """
         Initialize the workflow
         
         Args:
             llm_client: LLM client for agent decisions (optional)
+            **kwargs: Additional configuration (test_mode, etc.)
         """
         self.llm_client = llm_client
         self.timer = PhaseTimer()
+        self.test_mode = kwargs.get('test_mode', False)
         
         # Use SqliteSaver for persistence across interrupts
         db_path = DATA_DIR / "gtd_coach.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self.checkpointer = SqliteSaver.from_conn_string(str(db_path))
         
-        # Build the graph
-        self.graph = self._build_graph()
-        
-        # Get available tools
+        # Get available tools (must be before building graph)
         self.tools = self._get_workflow_tools()
+        
+        # Build the graph (depends on tools and checkpointer)
+        self.graph = self._build_graph()
     
     def _get_workflow_tools(self):
         """Get tools needed for this workflow"""
@@ -157,12 +159,6 @@ class WeeklyReviewWorkflow:
             handle_tool_errors=True
         )
         workflow.add_node("tools", tool_node)
-        
-        # Add retry policy for critical nodes
-        retry_policy = RetryPolicy(
-            max_attempts=3,
-            retry_on=[ConnectionError, TimeoutError]
-        )
         
         # Define the flow
         workflow.add_edge(START, "startup")
@@ -207,8 +203,7 @@ class WeeklyReviewWorkflow:
         
         # Load user context
         context_result = load_context_tool.invoke(
-            {"user_id": state.get('user_id')},
-            state
+            {"user_id": state.get('user_id')}
         )
         
         # Add startup message
@@ -277,7 +272,7 @@ class WeeklyReviewWorkflow:
             })
         
         # Check for ADHD patterns in real-time
-        pattern_result = detect_patterns_tool.invoke({}, state)
+        pattern_result = detect_patterns_tool.invoke({})
         
         if pattern_result.get('severity') in ['high', 'critical']:
             # Need intervention
@@ -320,7 +315,7 @@ class WeeklyReviewWorkflow:
         self.timer.start_phase('PROJECT_REVIEW')
         
         # First, clarify captured items
-        clarify_result = clarify_items_tool.invoke({}, state)
+        clarify_result = clarify_items_tool.invoke({})
         
         msg = f"📊 PROJECT REVIEW (12 minutes)\n"
         msg += f"Clarified {clarify_result['clarified_count']} items:\n"
@@ -345,7 +340,7 @@ class WeeklyReviewWorkflow:
                     'title': project_update['title'],
                     'outcome': project_update['outcome'],
                     'next_action': project_update['next_action']
-                }, state)
+                })
         
         state['messages'].append(
             AIMessage(content=f"✅ Reviewed {len(project_response.get('updates', []))} projects")
@@ -362,12 +357,11 @@ class WeeklyReviewWorkflow:
         self.timer.start_phase('PRIORITIZATION')
         
         # Organize items
-        organize_result = organize_tool.invoke({}, state)
+        organize_result = organize_tool.invoke({})
         
         # Prioritize actions
         prioritize_result = prioritize_actions_tool.invoke(
-            {"criteria": "eisenhower"},
-            state
+            {"criteria": "eisenhower"}
         )
         
         msg = "🎯 PRIORITIZATION (5 minutes)\n"
@@ -417,10 +411,10 @@ class WeeklyReviewWorkflow:
             "episode_type": "weekly_review",
             "episode_data": session_data,
             "description": f"Weekly review {state['session_id']}"
-        }, state)
+        })
         
         # Assess final state
-        assessment = assess_user_state_tool.invoke({}, state)
+        assessment = assess_user_state_tool.invoke({})
         
         # Generate summary
         duration = (datetime.now() - datetime.fromisoformat(state['started_at'])).seconds // 60
@@ -467,8 +461,7 @@ class WeeklyReviewWorkflow:
         
         # Provide intervention
         intervention_result = provide_intervention_tool.invoke(
-            {"intervention_type": intervention_type},
-            state
+            {"intervention_type": intervention_type}
         )
         
         state['messages'].append(
@@ -561,4 +554,4 @@ def create_weekly_review_workflow(llm_client=None, **kwargs):
     Returns:
         Configured WeeklyReviewWorkflow instance
     """
-    return WeeklyReviewWorkflow(llm_client=llm_client)
+    return WeeklyReviewWorkflow(llm_client=llm_client, **kwargs)

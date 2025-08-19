@@ -43,19 +43,27 @@ class DailyCaptureWorkflow:
     Hybrid workflow for daily capture combining structure with agent flexibility
     """
     
-    def __init__(self, llm_client=None, use_agent_decisions=True):
+    def __init__(self, llm_client=None, use_agent_decisions=True, **kwargs):
         """
         Initialize the workflow
         
         Args:
             llm_client: LLM client for agent decisions
             use_agent_decisions: Whether to allow agent to make routing decisions
+            **kwargs: Additional configuration (test_mode, etc.)
         """
         self.llm_client = llm_client
         self.use_agent_decisions = use_agent_decisions
-        self.tools = self._get_workflow_tools()
-        self.graph = self._build_graph()
+        self.test_mode = kwargs.get('test_mode', False)
+        
+        # Initialize checkpointer first (needed by _build_graph)
         self.checkpointer = InMemorySaver()
+        
+        # Get tools second
+        self.tools = self._get_workflow_tools()
+        
+        # Build graph last (depends on checkpointer and tools)
+        self.graph = self._build_graph()
     
     def _get_workflow_tools(self):
         """Get tools needed for this workflow"""
@@ -175,8 +183,7 @@ class DailyCaptureWorkflow:
         
         # Use the load_context_tool
         result = load_context_tool.invoke(
-            {"user_id": state.get('user_id')},
-            state
+            {"user_id": state.get('user_id')}
         )
         
         # Add message about loaded context
@@ -198,8 +205,7 @@ class DailyCaptureWorkflow:
         
         # Use timing analysis tool
         result = analyze_timing_tool.invoke(
-            {"date": "yesterday"},
-            state
+            {"date": "yesterday"}
         )
         
         # Add timing insights message
@@ -226,8 +232,7 @@ class DailyCaptureWorkflow:
         inboxes = ['outlook', 'physical', 'slack']
         for inbox in inboxes:
             result = scan_inbox_tool.invoke(
-                {"inbox_type": inbox},
-                state
+                {"inbox_type": inbox}
             )
             
             state['messages'].append(
@@ -236,8 +241,7 @@ class DailyCaptureWorkflow:
         
         # Brain dump
         brain_dump_result = brain_dump_tool.invoke(
-            {},
-            state
+            {}
         )
         
         state['messages'].append(
@@ -255,8 +259,7 @@ class DailyCaptureWorkflow:
         
         # Detect patterns
         result = detect_patterns_tool.invoke(
-            {},
-            state
+            {}
         )
         
         # Store pattern analysis
@@ -265,8 +268,7 @@ class DailyCaptureWorkflow:
         # Adjust behavior if needed
         if result.get('severity') in ['high', 'critical']:
             adjust_result = adjust_behavior_tool.invoke(
-                {"reason": f"Pattern severity: {result['severity']}"},
-                state
+                {"reason": f"Pattern severity: {result['severity']}"}
             )
             
             state['messages'].append(
@@ -283,8 +285,7 @@ class DailyCaptureWorkflow:
         
         # Clarify all captured items
         result = clarify_items_tool.invoke(
-            {},
-            state
+            {}
         )
         
         msg = f"✨ Clarified {result['clarified_count']} items:\n"
@@ -305,8 +306,7 @@ class DailyCaptureWorkflow:
         
         # Organize clarified items
         result = organize_tool.invoke(
-            {},
-            state
+            {}
         )
         
         msg = f"📂 Organized {result['organized_count']} items\n"
@@ -338,8 +338,7 @@ class DailyCaptureWorkflow:
                 "episode_type": "daily_capture_session",
                 "episode_data": session_data,
                 "description": f"Daily capture session {state['session_id']}"
-            },
-            state
+            }
         )
         
         state['messages'].append(
@@ -356,8 +355,7 @@ class DailyCaptureWorkflow:
         
         # Assess final user state
         assessment = assess_user_state_tool.invoke(
-            {},
-            state
+            {}
         )
         
         # Generate summary
@@ -475,7 +473,11 @@ def create_daily_capture_workflow(llm_client=None, **kwargs):
     Returns:
         Configured DailyCaptureWorkflow instance
     """
+    # Extract use_agent_decisions to avoid duplicate argument error
+    use_agent_decisions = kwargs.pop('use_agent_decisions', True)
+    
     return DailyCaptureWorkflow(
         llm_client=llm_client,
-        use_agent_decisions=kwargs.get('use_agent_decisions', True)
+        use_agent_decisions=use_agent_decisions,
+        **kwargs
     )
