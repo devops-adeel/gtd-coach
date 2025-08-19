@@ -107,15 +107,30 @@ def check_time_v2() -> str:
 @tool
 def transition_phase_v2(next_phase: str) -> Dict:
     """
-    Transition to the next phase with time reset and context management.
+    Transition to the next phase of the GTD weekly review process.
+    
+    IMPORTANT: 'WEEKLY_REVIEW' is NOT a valid phase - it's the overall process name.
+    The weekly review PROCESS consists of these 5 PHASES in order:
+    1. STARTUP - Check in with user, assess readiness
+    2. MIND_SWEEP - Capture everything on mind
+    3. PROJECT_REVIEW - Review projects and next actions
+    4. PRIORITIZATION - Set top 3 priorities for the week
+    5. WRAP_UP - Save progress and celebrate
     
     Args:
-        next_phase: Name of the phase to transition to (STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, WRAP_UP)
+        next_phase: Must be one of: STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, or WRAP_UP
         
     Returns:
         Dictionary with transition status and new phase details
+        
+    Example:
+        transition_phase_v2("MIND_SWEEP")  # Correct - transitions to mind sweep phase
+        transition_phase_v2("WEEKLY_REVIEW")  # WRONG - this will error
     """
     state = state_manager.get_state()
+    
+    # Log the exact parameter received for debugging
+    logger.info(f"transition_phase_v2 called with: '{next_phase}'")
     
     # Valid phases and their time limits
     PHASE_LIMITS = {
@@ -126,10 +141,21 @@ def transition_phase_v2(next_phase: str) -> Dict:
         'WRAP_UP': 3
     }
     
-    if next_phase not in PHASE_LIMITS:
+    # Check for common mistakes
+    if next_phase == "WEEKLY_REVIEW":
+        logger.error(f"Agent attempted to transition to 'WEEKLY_REVIEW' - this is the process name, not a phase")
         return {
             "success": False,
-            "error": f"Invalid phase: {next_phase}. Valid phases: {list(PHASE_LIMITS.keys())}"
+            "error": f"'WEEKLY_REVIEW' is not a valid phase - it's the name of the overall process. "
+                    f"Please choose one of the 5 phases: {list(PHASE_LIMITS.keys())}. "
+                    f"You are currently in {state.get('current_phase', 'STARTUP')} phase."
+        }
+    
+    if next_phase not in PHASE_LIMITS:
+        logger.error(f"Invalid phase requested: '{next_phase}'")
+        return {
+            "success": False,
+            "error": f"Invalid phase: '{next_phase}'. Valid phases are: {list(PHASE_LIMITS.keys())}"
         }
     
     # Save duration of current phase

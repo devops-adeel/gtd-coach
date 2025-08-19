@@ -194,7 +194,7 @@ class GTDAgentRunner:
                 # Start with minimal state to debug streaming issue
                 state = {
                     "messages": [
-                        SystemMessage(content="You are a GTD coach helping with a weekly review. Start by using the scan_inbox tool to check for any new items."),
+                        SystemMessage(content="You are a GTD coach helping with a weekly review process that has 5 phases: STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, and WRAP_UP. Begin in STARTUP phase by checking in with the user about their readiness and energy level. Do NOT transition to any other phase until the user is ready."),
                         HumanMessage(content="Let's start the GTD weekly review.")
                     ]
                 }

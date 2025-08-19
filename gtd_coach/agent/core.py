@@ -276,6 +276,8 @@ class GTDAgent:
         base_prompt = (
             "You are an ADHD coach guiding a 30-minute GTD weekly review. "
             f"Current phase: {phase}. "
+            "IMPORTANT: The weekly review has 5 phases (STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, WRAP_UP). "
+            "Never try to transition to 'WEEKLY_REVIEW' - that's the process name, not a phase. "
             "Be concise, supportive, and time-aware. "
             "Help user stay focused and celebrate progress. "
             "Use available tools to manage time, capture items, and track progress. "
@@ -329,11 +331,11 @@ class GTDAgent:
         phase = state.get("current_phase", "STARTUP")
         
         guidance = {
-            'STARTUP': "Check in with user. Are they ready? Set positive tone.",
-            'MIND_SWEEP': "Capture everything quickly. No judging, just dumping.",
-            'PROJECT_REVIEW': "Review projects efficiently. What's the next action?",
-            'PRIORITIZATION': "Focus on top 3 for the week. Use ABC method.",
-            'WRAP_UP': "Save data, celebrate completion, positive reinforcement."
+            'STARTUP': "Check in with user about readiness and energy level. Stay in STARTUP until user confirms they're ready. Do NOT transition phases yet.",
+            'MIND_SWEEP': "Capture everything quickly. No judging, just dumping. Use brain_dump or capture_item tools.",
+            'PROJECT_REVIEW': "Review projects efficiently. What's the next action? Use clarify_items tool.",
+            'PRIORITIZATION': "Focus on top 3 for the week. Use prioritize_actions tool with ABC method.",
+            'WRAP_UP': "Save data with save_memory tool, celebrate completion, positive reinforcement."
         }
         
         return guidance.get(phase, "")
