@@ -55,17 +55,9 @@ class GTDAgentRunner:
         self.memory = GraphitiMemory(session_id=self.session_id)
         self.pattern_detector = ADHDPatternDetector()
         
-        # Use minimal tools for debugging
-        from langchain_core.tools import tool
-        
-        @tool
-        def test_tool(query: str) -> str:
-            """Test tool for debugging"""
-            return f"Test response: {query}"
-        
-        # Start with just one tool to debug
-        self.agent.set_tools([test_tool])
-        logger.info("Using minimal test tool for debugging")
+        # Set tools on agent - use ESSENTIAL_TOOLS for now
+        self.agent.set_tools(ESSENTIAL_TOOLS)
+        logger.info(f"Using essential tool set ({len(ESSENTIAL_TOOLS)} tools)")
         
         logger.info(f"Initialized GTD Agent Runner - Session: {self.session_id}")
     
