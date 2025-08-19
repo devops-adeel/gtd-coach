@@ -199,10 +199,41 @@ class GTDAgentRunner:
                     ]
                 }
                 
-                # Add essential fields only
+                # Add essential fields for tools to work
                 state["session_id"] = self.session_id
                 state["workflow_type"] = "weekly_review"
                 state["current_phase"] = "STARTUP"
+                state["started_at"] = datetime.now().isoformat()
+                state["user_id"] = self.user_id
+                
+                # Add minimal required fields for tools
+                state["user_context"] = {}
+                state["previous_session"] = None
+                state["recurring_patterns"] = None
+                state["adhd_patterns"] = []
+                state["accountability_mode"] = "firm"
+                state["user_energy"] = None
+                state["focus_level"] = None
+                state["stress_indicators"] = []
+                
+                # GTD data
+                state["captures"] = []
+                state["processed_items"] = []
+                state["projects"] = []
+                state["weekly_priorities"] = []
+                
+                # Timing and memory
+                state["timing_data"] = None
+                state["focus_score"] = None
+                state["context_switches"] = None
+                state["uncategorized_minutes"] = None
+                state["graphiti_episode_ids"] = []
+                state["memory_batch"] = []
+                
+                # Phase management
+                state["completed_phases"] = []
+                state["phase_start_time"] = datetime.now()
+                state["phase_time_limit"] = 2  # STARTUP is 2 minutes
                 
                 # Initialize state manager for V2 tools
                 initialize_state_manager(state)
