@@ -222,10 +222,43 @@ def capture_item_tool(
         processed=False
     )
     
-    # Quick categorization based on keywords
+    # Memory-augmented categorization (only when we have enough captures for batch benefit)
+    memory_suggested_category = None
+    if state and state.get('captures') and len(state['captures']) > 5:
+        # Try to get memory suggestions for better categorization
+        try:
+            from gtd_coach.integrations.graphiti import GraphitiMemory
+            memory = GraphitiMemory(state.get('session_id', 'temp'))
+            
+            # Only search if memory is configured (quick check, no init)
+            if memory.is_configured():
+                import asyncio
+                # Search for similar past captures
+                search_query = f"similar capture: {content[:50]}"
+                results = asyncio.run(memory.search_with_context(
+                    query=search_query,
+                    num_results=2  # Very limited for performance
+                ))
+                
+                # Extract category suggestions from memory
+                for result in results:
+                    if hasattr(result, 'fact') and 'category:' in result.fact:
+                        # Extract category from fact like "Task captured: Review budget (category: review)"
+                        parts = result.fact.split('category:')
+                        if len(parts) > 1:
+                            memory_suggested_category = parts[1].strip().strip(')')
+                            logger.debug(f"Memory suggested category: {memory_suggested_category}")
+                            break
+        except Exception as e:
+            logger.debug(f"Could not get memory suggestions: {e}")
+    
+    # Quick categorization based on keywords (with memory override)
     content_lower = content.lower()
     
-    if any(word in content_lower for word in ['email', 'reply', 'respond', 'send']):
+    if memory_suggested_category:
+        capture.category = 'task' if memory_suggested_category not in ['someday', 'waiting', 'reference'] else memory_suggested_category
+        quick_category = memory_suggested_category
+    elif any(word in content_lower for word in ['email', 'reply', 'respond', 'send']):
         capture.category = 'task'
         quick_category = 'communication'
     elif any(word in content_lower for word in ['meeting', 'call', 'schedule', 'appointment']):

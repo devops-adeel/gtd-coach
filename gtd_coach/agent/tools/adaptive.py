@@ -67,9 +67,43 @@ def detect_patterns_tool(
     # Calculate overall severity
     severity = _calculate_overall_severity(patterns)
     
+    # Memory-augmented coping strategies for stress patterns
+    coping_strategies = []
+    if severity in ['high', 'critical'] and ('overwhelm' in patterns or 'excessive_switching' in patterns):
+        try:
+            from gtd_coach.integrations.graphiti import GraphitiMemory
+            memory = GraphitiMemory(state.get('session_id', 'temp'))
+            
+            # Only search if memory is configured
+            if memory.is_configured():
+                import asyncio
+                # Search for successful past coping strategies
+                stress_type = 'overwhelm' if 'overwhelm' in patterns else 'context switching'
+                search_query = f"successful coping strategy {stress_type} stress relief ADHD"
+                results = asyncio.run(memory.search_with_context(
+                    query=search_query,
+                    num_results=2  # Very limited for performance
+                ))
+                
+                # Extract coping strategies from memory
+                for result in results:
+                    if hasattr(result, 'fact'):
+                        # Look for facts about successful interventions
+                        if any(word in result.fact.lower() for word in ['helped', 'successful', 'worked', 'effective']):
+                            coping_strategies.append(result.fact)
+                            logger.debug(f"Memory suggested coping: {result.fact[:100]}")
+                            
+        except Exception as e:
+            logger.debug(f"Could not get memory coping strategies: {e}")
+    
     # Return patterns for state update
     new_patterns = [p for p in patterns.keys() 
                     if p not in state.get('adhd_patterns', [])] if state else list(patterns.keys())
+    
+    # Add memory-informed recommendations
+    recommendations = _generate_pattern_recommendations(patterns, severity)
+    if coping_strategies:
+        recommendations.insert(0, f"From past experience: {coping_strategies[0][:100]}")
     
     return {
         "patterns": patterns,
@@ -77,8 +111,9 @@ def detect_patterns_tool(
         "pattern_count": len(patterns),
         "new_patterns": new_patterns,
         "pattern_details": patterns,
-        "recommendations": _generate_pattern_recommendations(patterns, severity),
-        "intervention_needed": severity in ['high', 'critical']
+        "recommendations": recommendations,
+        "intervention_needed": severity in ['high', 'critical'],
+        "memory_coping_strategies": coping_strategies[:2]  # Include up to 2 memory suggestions
     }
 
 
