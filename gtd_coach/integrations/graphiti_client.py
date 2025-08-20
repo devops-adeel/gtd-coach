@@ -18,6 +18,15 @@ from graphiti_core.llm_client.openai_client import OpenAIClient
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.nodes import EpisodeType
 
+# Import Langfuse OpenAI wrapper for tracing embeddings
+try:
+    from langfuse.openai import OpenAI as LangfuseOpenAI
+    LANGFUSE_AVAILABLE = True
+except ImportError:
+    LANGFUSE_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.info("Langfuse OpenAI wrapper not available, embeddings won't be traced")
+
 # Import database driver for FalkorDB
 try:
     from graphiti_core.driver.falkordb_driver import FalkorDriver
@@ -37,6 +46,29 @@ except ImportError:
     logger.warning("GTD entities not available, using default Graphiti entities")
 
 logger = logging.getLogger(__name__)
+
+
+class TracedOpenAIEmbedder(OpenAIEmbedder):
+    """
+    Custom OpenAI embedder that uses Langfuse-wrapped client for tracing
+    """
+    
+    def __init__(self, config: OpenAIEmbedderConfig):
+        """Initialize embedder with Langfuse tracing if available"""
+        super().__init__(config)
+        
+        # Replace the internal OpenAI client with Langfuse-wrapped version
+        if LANGFUSE_AVAILABLE:
+            try:
+                # Create Langfuse-wrapped OpenAI client
+                self.client = LangfuseOpenAI(
+                    api_key=config.api_key,
+                    base_url=config.base_url if hasattr(config, 'base_url') else None
+                )
+                logger.info("✅ Embeddings will be traced with Langfuse")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Langfuse OpenAI wrapper: {e}")
+                # Fall back to regular OpenAI client (parent class already initialized it)
 
 
 class GraphitiClient:
@@ -110,7 +142,8 @@ class GraphitiClient:
                 embedding_model=os.getenv('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small')
             )
             
-            embedder = OpenAIEmbedder(config=embedder_config)
+            # Use traced embedder for Langfuse integration
+            embedder = TracedOpenAIEmbedder(config=embedder_config)
             
             # Initialize Graphiti with FalkorDB driver
             try:

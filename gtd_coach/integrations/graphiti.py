@@ -7,6 +7,7 @@ Provides dual-mode operation: Real Graphiti + JSON backup
 import asyncio
 import json
 import logging
+import math
 import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
@@ -444,29 +445,58 @@ class GraphitiMemory:
             pass  # Langfuse not configured
     
     async def _flush_graphiti_batch(self) -> None:
-        """Flush pending Graphiti episodes as a batch"""
+        """Flush pending Graphiti episodes with smart grouping (preserves custom entities)"""
         if not self.pending_graphiti_episodes:
             return
         
         episodes_to_send = self.pending_graphiti_episodes.copy()
         self.pending_graphiti_episodes.clear()
         
-        # Combine episodes into a single batch episode
-        batch_data = {
-            "type": "batch",
-            "episodes": episodes_to_send,
-            "count": len(episodes_to_send)
-        }
+        # Group episodes by type for more efficient processing
+        grouped_episodes = {}
+        for episode in episodes_to_send:
+            episode_type = episode.get('type', 'unknown')
+            if episode_type not in grouped_episodes:
+                grouped_episodes[episode_type] = []
+            grouped_episodes[episode_type].append(episode)
         
-        batch_episode = {
-            "type": "episode_batch",
-            "phase": self.current_phase,
-            "data": batch_data,
-            "timestamp": datetime.now().isoformat()
-        }
+        # Process groups efficiently
+        total_sent = 0
+        for episode_type, episodes in grouped_episodes.items():
+            # Skip trivial interactions if configured
+            if self.skip_trivial and episode_type == 'interaction':
+                trivial_count = 0
+                non_trivial = []
+                for ep in episodes:
+                    content = ep.get('data', {}).get('content', '').lower()
+                    if any(content.strip() == trivial for trivial in ['ok', 'okay', 'got it', 'yes', 'no', 'sure', 'thanks']):
+                        trivial_count += 1
+                    else:
+                        non_trivial.append(ep)
+                
+                if trivial_count > 0:
+                    logger.debug(f"Skipped {trivial_count} trivial {episode_type} episodes")
+                episodes = non_trivial
+            
+            # Send episodes of the same type together (still individually for custom entities)
+            if episodes:
+                logger.info(f"Processing {len(episodes)} {episode_type} episodes")
+                
+                # Process in smaller sub-batches to avoid overwhelming the API
+                sub_batch_size = 5  # Process 5 at a time
+                for i in range(0, len(episodes), sub_batch_size):
+                    sub_batch = episodes[i:i+sub_batch_size]
+                    
+                    # Send episodes concurrently within sub-batch for efficiency
+                    send_tasks = [self._send_single_episode(ep) for ep in sub_batch]
+                    await asyncio.gather(*send_tasks, return_exceptions=True)
+                    total_sent += len(sub_batch)
+                    
+                    # Small delay between sub-batches to respect rate limits
+                    if i + sub_batch_size < len(episodes):
+                        await asyncio.sleep(0.5)
         
-        await self._send_single_episode(batch_episode)
-        logger.info(f"Flushed {len(episodes_to_send)} episodes to Graphiti as batch")
+        logger.info(f"Smart flush completed: {total_sent} episodes sent to Graphiti")
     
     async def flush_episodes(self) -> int:
         """
@@ -640,16 +670,18 @@ class GraphitiMemory:
         """
         self.intervention_callback = callback
     
-    async def search_with_context(self, query: str, num_results: int = 10) -> List[Any]:
+    async def search_with_context(self, query: str, num_results: int = 10, 
+                                apply_temporal_decay: bool = True) -> List[Any]:
         """
-        Search Graphiti with user context centering
+        Search Graphiti with user context centering and temporal decay
         
         Args:
             query: Search query
             num_results: Maximum number of results
+            apply_temporal_decay: Whether to apply temporal decay to relevance scores
             
         Returns:
-            List of search results
+            List of search results with decayed relevance scores
         """
         if not self.graphiti_client:
             return []
@@ -660,22 +692,104 @@ class GraphitiMemory:
                 results = await self.graphiti_client.search(
                     query=query,
                     center_node_uuid=self.user_node_uuid,
-                    num_results=num_results
+                    num_results=num_results * 2  # Get more results for decay filtering
                 )
                 logger.debug(f"Context-centered search for '{query}' returned {len(results)} results")
             else:
                 # Fallback to regular search
                 results = await self.graphiti_client.search(
                     query=query,
-                    num_results=num_results
+                    num_results=num_results * 2  # Get more results for decay filtering
                 )
                 logger.debug(f"Regular search for '{query}' returned {len(results)} results")
+            
+            # Apply temporal decay if enabled
+            if apply_temporal_decay and results:
+                results = self._apply_temporal_decay(results)
+                # Re-sort by decayed score and limit to requested number
+                results = sorted(results, key=lambda r: getattr(r, 'decayed_score', 0), reverse=True)[:num_results]
+                logger.debug(f"Applied temporal decay, returning top {len(results)} results")
             
             return results
             
         except Exception as e:
             logger.error(f"Search failed: {e}")
             return []
+    
+    def _apply_temporal_decay(self, results: List[Any]) -> List[Any]:
+        """
+        Apply temporal decay to search results based on age
+        
+        Args:
+            results: List of search results
+            
+        Returns:
+            Results with decayed_score attribute added
+        """
+        current_time = datetime.now(timezone.utc)
+        
+        for result in results:
+            try:
+                # Extract timestamp from result
+                timestamp = None
+                if hasattr(result, 'timestamp'):
+                    timestamp = result.timestamp
+                elif hasattr(result, 'created_at'):
+                    timestamp = result.created_at
+                elif hasattr(result, 'metadata') and result.metadata:
+                    timestamp = result.metadata.get('timestamp') or result.metadata.get('created_at')
+                
+                if timestamp:
+                    # Parse timestamp if it's a string
+                    if isinstance(timestamp, str):
+                        # Handle ISO format with or without timezone
+                        if 'Z' in timestamp:
+                            timestamp = timestamp.replace('Z', '+00:00')
+                        timestamp = datetime.fromisoformat(timestamp)
+                        if timestamp.tzinfo is None:
+                            timestamp = timestamp.replace(tzinfo=timezone.utc)
+                    
+                    # Calculate age in days
+                    age_days = (current_time - timestamp).days
+                    
+                    # Apply decay function: score * e^(-λ * age_days)
+                    # λ (lambda) controls decay rate: 0.1 = 10% decay per day
+                    decay_rate = float(os.getenv('GRAPHITI_DECAY_RATE', '0.05'))  # 5% decay per day default
+                    decay_factor = math.exp(-decay_rate * age_days)
+                    
+                    # Get original score
+                    original_score = 1.0  # Default score if not available
+                    if hasattr(result, 'score'):
+                        original_score = float(result.score)
+                    elif hasattr(result, 'relevance'):
+                        original_score = float(result.relevance)
+                    
+                    # Calculate decayed score
+                    decayed_score = original_score * decay_factor
+                    
+                    # Add decayed score to result
+                    result.decayed_score = decayed_score
+                    result.decay_factor = decay_factor
+                    result.age_days = age_days
+                    
+                    logger.debug(
+                        f"Applied decay: age={age_days}d, factor={decay_factor:.3f}, "
+                        f"original={original_score:.3f}, decayed={decayed_score:.3f}"
+                    )
+                else:
+                    # No timestamp, use original score
+                    result.decayed_score = getattr(result, 'score', 1.0)
+                    result.decay_factor = 1.0
+                    result.age_days = 0
+                    
+            except Exception as e:
+                logger.warning(f"Failed to apply decay to result: {e}")
+                # Fall back to original score
+                result.decayed_score = getattr(result, 'score', 1.0)
+                result.decay_factor = 1.0
+                result.age_days = 0
+        
+        return results
     
     async def retrieve_and_score_memories(self, phase: str, query: Optional[str] = None, 
                                          north_star_metrics: Optional[Any] = None) -> tuple:
