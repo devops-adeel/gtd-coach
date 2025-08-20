@@ -407,8 +407,12 @@ def mock_external_services(request):
     # Skip mocking for integration tests that need real services
     if hasattr(request, 'node'):
         markers = request.node.iter_markers()
-        if any(marker.name in ['requires_falkordb', 'requires_api_keys', 'integration'] for marker in markers):
+        if any(marker.name in ['requires_falkordb', 'requires_api_keys', 'integration', 'agent_behavior'] for marker in markers):
             return
+    
+    # Also skip mocking if analyzing agent behavior
+    if os.getenv("ANALYZE_AGENT_BEHAVIOR", "false").lower() == "true":
+        return
     
     with patch('requests.post') as mock_post, \
          patch('langfuse.Langfuse') as mock_langfuse_cls, \
@@ -453,6 +457,72 @@ def mock_external_services(request):
         yield
 
 
+# ==================== Langfuse Test Analysis ====================
+
+@pytest.fixture
+def langfuse_analyzer(request, monkeypatch):
+    """
+    Fixture that conditionally enables real Langfuse for agent behavior tests
+    and automatically analyzes traces on test failure.
+    
+    Activated by setting ANALYZE_AGENT_BEHAVIOR=true
+    """
+    import uuid
+    
+    # Check if we should analyze agent behavior
+    analyze_behavior = os.getenv("ANALYZE_AGENT_BEHAVIOR", "false").lower() == "true"
+    
+    if not analyze_behavior:
+        # Return mock as usual
+        yield None
+        return
+    
+    # Load real API keys from ~/.env if available
+    home_env = os.path.expanduser("~/.env")
+    if os.path.exists(home_env):
+        from dotenv import load_dotenv
+        load_dotenv(home_env)
+    
+    # Generate unique session ID for this test
+    test_session_id = f"test-{request.node.name}-{uuid.uuid4().hex[:8]}"
+    
+    # Set session ID in environment for the test
+    monkeypatch.setenv("LANGFUSE_SESSION_ID", test_session_id)
+    
+    # Don't mock Langfuse - use real client
+    # The mock_external_services fixture will be skipped for these tests
+    
+    yield test_session_id
+    
+    # After test completes, check if it failed
+    if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
+        # Test failed - analyze traces
+        print("\n" + "="*80)
+        print("TEST FAILED - ANALYZING LANGFUSE TRACES")
+        print("="*80)
+        
+        # Import and use the analysis function
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from scripts.analyze_langfuse_traces import analyze_test_failure
+        
+        try:
+            analyze_test_failure(test_session_id)
+        except Exception as e:
+            print(f"Error analyzing traces: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Hook to capture test results for the langfuse_analyzer fixture
+    """
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+
+
 # ==================== Skip Markers ====================
 
 def pytest_configure(config):
@@ -468,6 +538,9 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers", "requires_api_keys: Tests requiring real API keys (will be skipped)"
+    )
+    config.addinivalue_line(
+        "markers", "agent_behavior: Tests that analyze agent behavior with Langfuse"
     )
 
 

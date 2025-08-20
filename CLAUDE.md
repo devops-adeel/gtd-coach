@@ -31,4 +31,46 @@ When working with this codebase:
 3. Keep phases under time limits
 4. Test with `demo-review.py` first
 
+### Test Debugging with Langfuse Traces (MANDATORY)
+
+When running tests that involve agent behavior or model interactions:
+
+1. **ALWAYS query Langfuse traces for failing tests** to understand agent behavior
+2. **Use the permanent analysis script** at `scripts/analyze_langfuse_traces.py`
+3. **Environment setup required:**
+   ```bash
+   # Set to enable real Langfuse (not mocked) for agent tests
+   export ANALYZE_AGENT_BEHAVIOR=true
+   
+   # API keys needed (check ~/.env for real keys)
+   export LANGFUSE_PUBLIC_KEY=...
+   export LANGFUSE_SECRET_KEY=...
+   ```
+
+4. **Test failure analysis:**
+   - For PASSING tests: No trace output needed
+   - For FAILING tests: Automatic trace analysis will display:
+     - Complete agent conversation flow
+     - Tool calls and responses
+     - Interrupt patterns
+     - State transitions
+     - Error messages and stack traces
+
+5. **Using the analysis script directly:**
+   ```bash
+   # Analyze recent traces (last hour)
+   python scripts/analyze_langfuse_traces.py
+   
+   # Analyze specific session
+   python scripts/analyze_langfuse_traces.py --session SESSION_ID
+   
+   # Analyze test failure automatically
+   python scripts/analyze_langfuse_traces.py --test-failure SESSION_ID
+   ```
+
+6. **In pytest tests:**
+   - Tests will automatically analyze traces on failure when `ANALYZE_AGENT_BEHAVIOR=true`
+   - The `langfuse_analyzer` fixture handles this automatically
+   - No code changes needed in individual tests
+
 See full documentation in `docs/` directory.
