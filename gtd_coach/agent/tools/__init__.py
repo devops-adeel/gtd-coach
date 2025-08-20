@@ -26,6 +26,13 @@ from .interaction import (
     provide_encouragement_tool
 )
 
+# Import conversation tools (V2 - Uses interrupt pattern)
+from .conversation_v2 import (
+    check_in_with_user_v2,
+    wait_for_user_input_v2,
+    confirm_with_user_v2
+)
+
 # Import all existing tools
 from .timing import (
     analyze_timing_tool,
@@ -364,11 +371,22 @@ INTERACTION_TOOLS = [
 ALL_TOOLS = (TIME_TOOLS + INTERACTION_TOOLS + TIMING_TOOLS + 
             CAPTURE_TOOLS + GTD_TOOLS + MEMORY_TOOLS + ADAPTIVE_TOOLS)
 
+# Conversation tools (V2 - Uses interrupt pattern)
+CONVERSATION_TOOLS = [
+    check_in_with_user_v2,
+    wait_for_user_input_v2,
+    confirm_with_user_v2
+]
+
 # Minimal essential tools for weekly review (to fit in 4096 token context)
 ESSENTIAL_TOOLS = [
     # Core time management (2)
     check_time_tool,
     transition_phase_tool,
+    # Core conversation (3) - NEW: Uses interrupt pattern
+    check_in_with_user_v2,
+    wait_for_user_input_v2,
+    confirm_with_user_v2,
     # Core capture (2) 
     brain_dump_tool,
     capture_item_tool,

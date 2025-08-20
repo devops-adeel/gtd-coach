@@ -11,9 +11,11 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+from contextlib import nullcontext
 from dotenv import load_dotenv
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langgraph.types import Command
 
 # Import agent components
 from gtd_coach.agent.core import GTDAgent
@@ -23,6 +25,21 @@ from gtd_coach.agent.state import AgentState
 # Import integrations
 from gtd_coach.integrations.graphiti import GraphitiMemory
 from gtd_coach.patterns.adhd_metrics import ADHDPatternDetector
+
+# Import enhanced observability
+try:
+    from gtd_coach.observability import (
+        LangfuseTracer, 
+        set_global_tracer,
+        InterruptDebugger,
+        analyze_interrupt_failure
+    )
+    OBSERVABILITY_AVAILABLE = True
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.warning("Enhanced observability not available - using basic mode")
+    OBSERVABILITY_AVAILABLE = False
+    LangfuseTracer = None
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +66,9 @@ class GTDAgentRunner:
         lm_studio_url = os.getenv('LM_STUDIO_URL', 'http://host.docker.internal:1234')
         if not lm_studio_url.endswith('/v1'):
             lm_studio_url = f"{lm_studio_url}/v1"
-        model_name = os.getenv('LM_STUDIO_MODEL', 'meta-llama-3.1-8b-instruct')
-        logger.info(f"Configuring LM Studio: URL={lm_studio_url}, Model={model_name}")
-        self.agent = GTDAgent(lm_studio_url=lm_studio_url, model_name=model_name)
+        self.model_name = os.getenv('LM_STUDIO_MODEL', 'meta-llama-3.1-8b-instruct')  # Store as instance variable
+        logger.info(f"Configuring LM Studio: URL={lm_studio_url}, Model={self.model_name}")
+        self.agent = GTDAgent(lm_studio_url=lm_studio_url, model_name=self.model_name)
         self.memory = GraphitiMemory(session_id=self.session_id)
         self.pattern_detector = ADHDPatternDetector()
         
@@ -177,11 +194,45 @@ class GTDAgentRunner:
             Exit code (0 for success)
         """
         try:
+            # Initialize enhanced tracer if available
+            tracer = None
+            callbacks = []
+            if OBSERVABILITY_AVAILABLE and LangfuseTracer:
+                try:
+                    tracer = LangfuseTracer(
+                        session_id=self.session_id,
+                        user_id=self.user_id,
+                        metadata={
+                            "workflow_type": "weekly_review",
+                            "agent_type": "react_with_interrupt",
+                            "tools_count": len(ESSENTIAL_TOOLS),
+                            "model": self.model_name
+                        }
+                    )
+                    
+                    # Set global tracer for interrupt monitoring
+                    set_global_tracer(tracer)
+                    
+                    # Get Langfuse handler for callbacks
+                    langfuse_handler = tracer.get_handler()
+                    if langfuse_handler:
+                        callbacks = [langfuse_handler]
+                    
+                    logger.info(f"Enhanced observability enabled for session {self.session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize enhanced tracer: {e}")
+            
             # Configuration for agent
             config = {
                 "configurable": {
                     "thread_id": thread_id or self.session_id,
                     "checkpoint_ns": "weekly_review"
+                },
+                "callbacks": callbacks,
+                "metadata": {
+                    "langfuse_session_id": self.session_id,  # Required for Langfuse session tracking
+                    "user_id": self.user_id,
+                    "workflow_type": "weekly_review"
                 },
                 "recursion_limit": 150  # Ensure agent has enough steps for full conversation
             }
@@ -197,17 +248,29 @@ class GTDAgentRunner:
                     "messages": [
                         SystemMessage(content="""You are a GTD coach helping with a weekly review process that has 5 phases: STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, and WRAP_UP.
 
-CRITICAL INSTRUCTIONS:
-1. After ANY tool call, you MUST continue the conversation by asking the user questions
-2. In STARTUP phase, IMMEDIATELY ask these questions (don't just say you will):
-   - "How's your energy level today on a scale of 1-10?"
-   - "Do you have any concerns or blockers before we begin?"
-   - "Are you ready to start the mind sweep phase?"
-3. ALWAYS end your responses with a question to the user
-4. Never let the conversation end - keep engaging
-5. If you've called a tool, your next message MUST include specific questions for the user
+CRITICAL INSTRUCTIONS FOR CONVERSATION FLOW:
+1. After calling transition_phase_v2, you MUST use one of the conversation tools to continue
+2. Use check_in_with_user_v2 for multiple questions in a phase
+3. Use wait_for_user_input_v2 for single questions
+4. Use confirm_with_user_v2 for yes/no confirmations
 
-Do NOT transition phases until the user responds. Do NOT end without asking questions."""),
+PHASE-SPECIFIC BEHAVIOR:
+- STARTUP: After transitioning, use check_in_with_user_v2 with:
+  ["How's your energy level today on a scale of 1-10?",
+   "Do you have any concerns or blockers before we begin?",
+   "Are you ready to start the mind sweep phase?"]
+- MIND_SWEEP: Use wait_for_user_input_v2 to ask "What's been on your mind this week?"
+- PROJECT_REVIEW: Use wait_for_user_input_v2 to ask about specific projects
+- PRIORITIZATION: Use check_in_with_user_v2 to identify top 3 priorities
+- WRAP_UP: Use confirm_with_user_v2 to confirm session completion
+
+AVAILABLE CONVERSATION TOOLS:
+- check_in_with_user_v2(phase, questions): Ask multiple questions
+- wait_for_user_input_v2(prompt): Ask single question and wait
+- confirm_with_user_v2(message): Get yes/no confirmation
+
+IMPORTANT: The conversation tools will pause execution and wait for user input.
+Never end the conversation without using these tools to engage the user."""),
                         HumanMessage(content="Let's start the GTD weekly review.")
                     ]
                 }
@@ -257,18 +320,144 @@ Do NOT transition phases until the user responds. Do NOT end without asking ques
             print("🎯 GTD WEEKLY REVIEW - LANGGRAPH AGENT")
             print("="*60 + "\n")
             
-            # Stream agent execution
+            # Trace graph configuration
+            if tracer:
+                tracer.trace_graph_config({
+                    "checkpointer": "InMemorySaver",
+                    "thread_id": config["configurable"]["thread_id"],
+                    "recursion_limit": config.get("recursion_limit"),
+                    "tools": [t.name for t in ESSENTIAL_TOOLS]
+                })
+            
+            # Stream agent execution with debugging
             stream_completed = False
             chunk_count = 0
-            for chunk in self.agent.stream(state, config, stream_mode="values"):
-                self._handle_stream_chunk(chunk)
-                stream_completed = True
-                chunk_count += 1
+            interrupt_count = 0
+            last_result = None
+            
+            logger.info(f"Starting agent stream with config: {config}")
+            logger.debug(f"Session ID in metadata: {config.get('metadata', {}).get('langfuse_session_id')}")
+            
+            # Use interrupt debugger for comprehensive tracking
+            with InterruptDebugger("main_stream") if OBSERVABILITY_AVAILABLE else nullcontext() as debugger:
+                for chunk in self.agent.stream(state, config, stream_mode="values"):
+                    self._handle_stream_chunk(chunk)
+                    stream_completed = True
+                    chunk_count += 1
+                    last_result = chunk  # Store the last chunk
+                    
+                    # Log chunk details for debugging
+                    logger.debug(f"Stream chunk #{chunk_count}: keys={list(chunk.keys()) if isinstance(chunk, dict) else 'non-dict'}")
+                    
+                    # Track chunk with enhanced tracer
+                    if tracer:
+                        tracer.trace_stream_chunk(chunk, chunk_count)
+                    
+                    # Check for interrupts in debugger
+                    if debugger and hasattr(debugger, 'check_interrupt_result'):
+                        debugger.check_interrupt_result(chunk)
+            
+            # Handle interrupts in a loop until there are no more
+            logger.info(f"Checking for interrupts in last result. Has __interrupt__ key: {'__interrupt__' in last_result if last_result else 'No result'}")
+            
+            while last_result and '__interrupt__' in last_result:
+                logger.info(f"✅ INTERRUPT DETECTED in result: {last_result.get('__interrupt__')}")
+                interrupts = last_result['__interrupt__']
+                
+                # Handle each interrupt in this batch
+                for interrupt_data in interrupts if isinstance(interrupts, list) else [interrupts]:
+                    interrupt_count += 1
+                    
+                    # Extract the interrupt value/question
+                    if hasattr(interrupt_data, 'value'):
+                        prompt = interrupt_data.value
+                    elif isinstance(interrupt_data, dict) and 'value' in interrupt_data:
+                        prompt = interrupt_data['value']
+                    else:
+                        prompt = str(interrupt_data)
+                    
+                    logger.info(f"Interrupt #{interrupt_count}: {prompt}")
+                    
+                    # Track interrupt with enhanced tracer
+                    if tracer:
+                        tracer.trace_interrupt_captured(interrupt_data)
+                    
+                    print("\n" + "="*60)
+                    print(f"🔔 Agent needs input: {prompt}")
+                    
+                    # Get user input
+                    try:
+                        user_input = input("👤 You: ")
+                    except (EOFError, KeyboardInterrupt):
+                        print("\n⚠️ Review interrupted by user")
+                        break
+                    
+                    print("="*60 + "\n")
+                    
+                    # Resume agent with user input
+                    logger.info(f"Resuming agent with Command(resume={user_input})")
+                    
+                    # Track resume with enhanced tracer
+                    if tracer:
+                        tracer.trace_interrupt_resume(user_input)
+                    
+                    # Resume using invoke to get complete state (avoids nested streaming)
+                    # This returns the full state including any new interrupts
+                    logger.info("Using invoke() for resume to avoid nested streaming")
+                    last_result = self.agent.invoke(
+                        Command(resume=user_input),
+                        config
+                    )
+                    
+                    # Handle the result as a single chunk
+                    if last_result:
+                        self._handle_stream_chunk(last_result)
+                        chunk_count += 1
+                        
+                        # Track resumed state
+                        if tracer:
+                            tracer.trace_stream_chunk(last_result, chunk_count)
+                    
+                    # After handling this interrupt, the loop will check for more
+                    logger.info(f"Completed interrupt #{interrupt_count}, checking for more...")
+            
+            # Log when no more interrupts are detected
+            if interrupt_count == 0:
+                logger.warning(f"❌ NO INTERRUPTS DETECTED in stream result")
+            else:
+                logger.info(f"✅ All {interrupt_count} interrupts handled successfully")
+                if last_result:
+                    logger.debug(f"Last result keys: {list(last_result.keys()) if isinstance(last_result, dict) else 'non-dict'}")
+                    logger.debug(f"Last result (truncated): {str(last_result)[:500]}")
+            
+            # Final tracking and analysis
+            if tracer:
+                # Score conversation flow
+                flow_scores = tracer.score_conversation_flow()
+                
+                # Get metrics summary
+                metrics_summary = tracer.get_metrics_summary()
+                logger.info(f"Session metrics: {metrics_summary}")
+                
+                # Analyze interrupt success
+                if interrupt_count == 0 and tracer.metrics["interrupt_attempts"] > 0:
+                    analyze_interrupt_failure(
+                        expected_interrupt=True,
+                        actual_result=last_result,
+                        tool_name="conversation_tools",
+                        additional_context={
+                            "chunks": chunk_count,
+                            "attempts": tracer.metrics["interrupt_attempts"]
+                        }
+                    )
+                
+                # Flush events
+                tracer.flush()
             
             if not stream_completed:
                 logger.warning("Stream ended without producing any chunks")
             else:
-                logger.info(f"Stream completed with {chunk_count} chunks")
+                logger.info(f"Stream completed with {chunk_count} chunks, {interrupt_count} interrupts")
             
             # Final summary
             self._show_final_summary()
@@ -362,6 +551,16 @@ Ready to begin? Let's make this productive and fun!"""
         }
         
         time_limit = phase_times.get(new_phase, 5)
+        
+        # Track phase transition if tracer available
+        from gtd_coach.observability import get_global_tracer
+        tracer = get_global_tracer()
+        if tracer and hasattr(self, '_last_phase'):
+            tracer.trace_phase_transition(
+                from_phase=self._last_phase,
+                to_phase=new_phase,
+                duration=None  # Duration tracked elsewhere
+            )
         
         print(f"\n{'='*60}")
         print(f"📍 PHASE: {new_phase} ({time_limit} minutes)")

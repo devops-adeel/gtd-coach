@@ -193,18 +193,26 @@ def transition_phase_v2(next_phase: str) -> Dict:
     
     # Provide phase-specific guidance for agent's next action
     phase_actions = {
-        'STARTUP': "Now ask the user about their energy level (1-10) and if they have any concerns.",
-        'MIND_SWEEP': "Now help the user capture everything on their mind. Ask what's been on their plate.",
-        'PROJECT_REVIEW': "Now review projects with the user. Ask about their current projects.",
-        'PRIORITIZATION': "Now help set top 3 priorities. Ask what's most important this week.",
-        'WRAP_UP': "Now celebrate completion and save the session. Congratulate the user!"
+        'STARTUP': "Now use check_in_with_user_v2 to ask about energy level and readiness.",
+        'MIND_SWEEP': "Now use wait_for_user_input_v2 to ask what's been on their mind.",
+        'PROJECT_REVIEW': "Now use wait_for_user_input_v2 to review current projects.",
+        'PRIORITIZATION': "Now use check_in_with_user_v2 to identify top 3 priorities.",
+        'WRAP_UP': "Now use confirm_with_user_v2 to confirm session completion and save."
     }
+    
+    # Add flag to signal agent should continue conversation
+    requires_user_input = next_phase in ['STARTUP', 'MIND_SWEEP', 'PROJECT_REVIEW', 'PRIORITIZATION']
+    if requires_user_input:
+        state_manager.set("awaiting_user_input", True)
+        state_manager.set("next_questions", phase_actions.get(next_phase))
     
     return {
         "success": True,
         "new_phase": next_phase,
         "time_limit": PHASE_LIMITS[next_phase],
-        "message": f"Transitioned to {next_phase} ({PHASE_LIMITS[next_phase]} minutes). {phase_actions.get(next_phase, 'Continue with this phase.')}"
+        "message": f"Transitioned to {next_phase} ({PHASE_LIMITS[next_phase]} minutes). {phase_actions.get(next_phase, 'Continue with this phase.')}",
+        "requires_user_input": requires_user_input,
+        "conversation_tool_hint": phase_actions.get(next_phase, "")
     }
 
 

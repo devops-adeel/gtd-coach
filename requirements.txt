@@ -9,7 +9,7 @@ python-dotenv==1.1.1  # For loading environment variables from .env file
 graphiti-core[falkordb,openai]==0.17.9  # Last version with FalkorDB support
 
 # LLM Observability
-langfuse[openai]==3.2.4  # LLM observability with OpenAI integration (v3 with OpenTelemetry)
+langfuse[openai]>=3.2.4  # LLM observability with OpenAI integration (v3 with OpenTelemetry)
 
 # LangGraph and LangChain v0.3+ (resolves tenacity conflicts)
 langgraph>=0.3.27  # Stateful agent framework (latest stable)

@@ -11,9 +11,11 @@ from datetime import datetime
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_core.messages.utils import trim_messages, count_tokens_approximately
+from langchain_core.runnables import RunnablePassthrough
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 from pathlib import Path
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
@@ -175,14 +177,20 @@ class GTDAgent:
             logger.error(f"LLM test failed: {e}")
             raise
         
-        # Create agent with tools (V2 tools don't need state injection)
-        self.agent = create_react_agent(
+        # Create base agent with tools
+        base_agent = create_react_agent(
             self.llm,
             self.tools,
             checkpointer=self.checkpointer
         )
         
-        logger.info(f"Created ReAct agent with {len(self.tools)} tools")
+        # Wrap agent in RunnablePassthrough to force chain execution
+        # This ensures Langfuse metadata (session_id, user_id) propagates correctly
+        # Without this wrapper, Langfuse v3 doesn't recognize the agent as a chain
+        # and metadata won't be captured in traces
+        self.agent = RunnablePassthrough() | base_agent
+        
+        logger.info(f"Created ReAct agent with {len(self.tools)} tools (wrapped for Langfuse compatibility)")
     
     def _pre_model_hook(self, state: Dict) -> List:
         """
@@ -378,7 +386,7 @@ Do NOT proceed or transition phases until user responds.""",
         Invoke the agent with state and configuration
         
         Args:
-            state: Initial or current state
+            state: Initial or current state (Dict) or Command object for resume
             config: Configuration including thread_id
             
         Returns:
@@ -388,11 +396,17 @@ Do NOT proceed or transition phases until user responds.""",
             raise RuntimeError("Agent not initialized. Call set_tools() first.")
         
         try:
-            # Ensure required state fields
-            state = self._ensure_state_fields(state)
-            
-            # Run agent
-            result = self.agent.invoke(state, config)
+            # Handle Command objects for resume after interrupt
+            if isinstance(state, Command):
+                # Pass Command directly to agent without preprocessing
+                logger.debug(f"Invoking with Command object: {state}")
+                result = self.agent.invoke(state, config)
+            else:
+                # Normal flow with state dictionary
+                state = self._ensure_state_fields(state)
+                
+                # Run agent
+                result = self.agent.invoke(state, config)
             
             # Log context metrics
             logger.info(f"Context usage - Total: {self.context_metrics['total_tokens']}, "
@@ -409,7 +423,7 @@ Do NOT proceed or transition phases until user responds.""",
         Stream agent execution for real-time feedback
         
         Args:
-            state: Initial or current state
+            state: Initial or current state (Dict) or Command object for resume
             config: Configuration including thread_id
             stream_mode: Type of streaming (values, updates, debug)
             
@@ -420,12 +434,19 @@ Do NOT proceed or transition phases until user responds.""",
             raise RuntimeError("Agent not initialized. Call set_tools() first.")
         
         try:
-            # Ensure required state fields
-            state = self._ensure_state_fields(state)
-            
-            # Stream agent execution
-            for chunk in self.agent.stream(state, config, stream_mode=stream_mode):
-                yield chunk
+            # Handle Command objects for resume after interrupt
+            if isinstance(state, Command):
+                # Pass Command directly to agent without preprocessing
+                logger.debug(f"Streaming with Command object: {state}")
+                for chunk in self.agent.stream(state, config, stream_mode=stream_mode):
+                    yield chunk
+            else:
+                # Normal flow with state dictionary
+                state = self._ensure_state_fields(state)
+                
+                # Stream agent execution
+                for chunk in self.agent.stream(state, config, stream_mode=stream_mode):
+                    yield chunk
                 
         except Exception as e:
             logger.error(f"Agent streaming failed: {e}")
