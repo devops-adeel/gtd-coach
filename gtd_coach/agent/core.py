@@ -278,9 +278,9 @@ class GTDAgent:
             f"Current phase: {phase}. "
             "IMPORTANT: The weekly review has 5 phases (STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, WRAP_UP). "
             "Never try to transition to 'WEEKLY_REVIEW' - that's the process name, not a phase. "
+            "CRITICAL: After any tool call, you MUST ask the user specific questions - don't just say you will. "
+            "ALWAYS end your messages with questions to keep the conversation going. "
             "Be concise, supportive, and time-aware. "
-            "Help user stay focused and celebrate progress. "
-            "Use available tools to manage time, capture items, and track progress. "
         )
         
         if mode == "firm":
@@ -331,7 +331,12 @@ class GTDAgent:
         phase = state.get("current_phase", "STARTUP")
         
         guidance = {
-            'STARTUP': "Check in with user about readiness and energy level. Stay in STARTUP until user confirms they're ready. Do NOT transition phases yet.",
+            'STARTUP': """Check in with user about readiness and energy level. 
+Ask SPECIFIC questions:
+1. "How's your energy level today on a scale of 1-10?"
+2. "Any concerns or blockers before we begin?"
+3. "Are you ready to start the mind sweep?"
+Do NOT proceed or transition phases until user responds.""",
             'MIND_SWEEP': "Capture everything quickly. No judging, just dumping. Use brain_dump or capture_item tools.",
             'PROJECT_REVIEW': "Review projects efficiently. What's the next action? Use clarify_items tool.",
             'PRIORITIZATION': "Focus on top 3 for the week. Use prioritize_actions tool with ABC method.",

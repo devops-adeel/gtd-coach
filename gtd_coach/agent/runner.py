@@ -182,7 +182,8 @@ class GTDAgentRunner:
                 "configurable": {
                     "thread_id": thread_id or self.session_id,
                     "checkpoint_ns": "weekly_review"
-                }
+                },
+                "recursion_limit": 150  # Ensure agent has enough steps for full conversation
             }
             
             if resume and thread_id:
@@ -194,7 +195,19 @@ class GTDAgentRunner:
                 # Start with minimal state to debug streaming issue
                 state = {
                     "messages": [
-                        SystemMessage(content="You are a GTD coach helping with a weekly review process that has 5 phases: STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, and WRAP_UP. Begin in STARTUP phase by checking in with the user about their readiness and energy level. Do NOT transition to any other phase until the user is ready."),
+                        SystemMessage(content="""You are a GTD coach helping with a weekly review process that has 5 phases: STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, and WRAP_UP.
+
+CRITICAL INSTRUCTIONS:
+1. After ANY tool call, you MUST continue the conversation by asking the user questions
+2. In STARTUP phase, IMMEDIATELY ask these questions (don't just say you will):
+   - "How's your energy level today on a scale of 1-10?"
+   - "Do you have any concerns or blockers before we begin?"
+   - "Are you ready to start the mind sweep phase?"
+3. ALWAYS end your responses with a question to the user
+4. Never let the conversation end - keep engaging
+5. If you've called a tool, your next message MUST include specific questions for the user
+
+Do NOT transition phases until the user responds. Do NOT end without asking questions."""),
                         HumanMessage(content="Let's start the GTD weekly review.")
                     ]
                 }
@@ -245,8 +258,17 @@ class GTDAgentRunner:
             print("="*60 + "\n")
             
             # Stream agent execution
+            stream_completed = False
+            chunk_count = 0
             for chunk in self.agent.stream(state, config, stream_mode="values"):
                 self._handle_stream_chunk(chunk)
+                stream_completed = True
+                chunk_count += 1
+            
+            if not stream_completed:
+                logger.warning("Stream ended without producing any chunks")
+            else:
+                logger.info(f"Stream completed with {chunk_count} chunks")
             
             # Final summary
             self._show_final_summary()

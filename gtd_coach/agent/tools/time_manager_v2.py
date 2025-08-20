@@ -191,11 +191,20 @@ def transition_phase_v2(next_phase: str) -> Dict:
     except Exception as e:
         logger.debug(f"Could not play transition sound: {e}")
     
+    # Provide phase-specific guidance for agent's next action
+    phase_actions = {
+        'STARTUP': "Now ask the user about their energy level (1-10) and if they have any concerns.",
+        'MIND_SWEEP': "Now help the user capture everything on their mind. Ask what's been on their plate.",
+        'PROJECT_REVIEW': "Now review projects with the user. Ask about their current projects.",
+        'PRIORITIZATION': "Now help set top 3 priorities. Ask what's most important this week.",
+        'WRAP_UP': "Now celebrate completion and save the session. Congratulate the user!"
+    }
+    
     return {
         "success": True,
         "new_phase": next_phase,
         "time_limit": PHASE_LIMITS[next_phase],
-        "message": f"Transitioned to {next_phase} ({PHASE_LIMITS[next_phase]} minutes)"
+        "message": f"Transitioned to {next_phase} ({PHASE_LIMITS[next_phase]} minutes). {phase_actions.get(next_phase, 'Continue with this phase.')}"
     }
 
 
