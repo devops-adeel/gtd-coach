@@ -249,21 +249,17 @@ class PostSessionEvaluator:
     
     async def _evaluate_task_extraction(self, interaction: Dict[str, Any]) -> Dict[str, float]:
         """Evaluate task extraction accuracy"""
-        prompt = f"""
-You are evaluating task extraction accuracy for an ADHD coaching session.
-
-User said: {interaction.get('user_input', '')}
-
-Tasks extracted by system: {json.dumps(interaction.get('extracted_tasks', []))}
-
-Questions:
-1. Are all tasks mentioned by the user captured? (List any missed tasks)
-2. Are there any incorrectly extracted items that aren't tasks?
-3. Overall accuracy score (0.0 to 1.0)?
-
-Respond in JSON format:
-{{"score": 0.0-1.0, "missed_tasks": [], "incorrect_extractions": [], "reasoning": "brief explanation"}}
-"""
+        # Use prompt manager to get evaluation prompt
+        from gtd_coach.prompts.manager import get_prompt_manager
+        prompt_manager = get_prompt_manager()
+        
+        prompt = prompt_manager.format_prompt(
+            "gtd-evaluation-task-extraction",
+            {
+                "user_input": interaction.get('user_input', ''),
+                "extracted_tasks": json.dumps(interaction.get('extracted_tasks', []))
+            }
+        )
         
         try:
             # Try cloud model first
@@ -293,22 +289,19 @@ Respond in JSON format:
     
     async def _evaluate_memory_relevance(self, interaction: Dict[str, Any]) -> Dict[str, float]:
         """Evaluate memory relevance"""
-        prompt = f"""
-You are evaluating memory relevance for an ADHD coaching session.
-
-Current context: {interaction.get('phase', '')} phase
-User input: {interaction.get('user_input', '')}
-Retrieved memories: {json.dumps(interaction.get('retrieved_memories', []))}
-Coach response: {interaction.get('coach_response', '')}
-
-Questions:
-1. Were the retrieved memories relevant to the current context?
-2. Did the coach actually use the memories in the response?
-3. Relevance score (0.0 to 1.0)?
-
-Respond in JSON format:
-{{"score": 0.0-1.0, "memories_used": true/false, "reasoning": "brief explanation"}}
-"""
+        # Use prompt manager to get evaluation prompt
+        from gtd_coach.prompts.manager import get_prompt_manager
+        prompt_manager = get_prompt_manager()
+        
+        prompt = prompt_manager.format_prompt(
+            "gtd-evaluation-memory-relevance",
+            {
+                "phase": interaction.get('phase', ''),
+                "user_input": interaction.get('user_input', ''),
+                "retrieved_memories": json.dumps(interaction.get('retrieved_memories', [])),
+                "coach_response": interaction.get('coach_response', '')
+            }
+        )
         
         try:
             # Try cloud model first
@@ -338,24 +331,20 @@ Respond in JSON format:
     
     async def _evaluate_coaching_quality(self, interaction: Dict[str, Any]) -> Dict[str, float]:
         """Evaluate coaching quality for ADHD appropriateness"""
-        prompt = f"""
-You are evaluating coaching quality for ADHD users.
-
-Phase: {interaction.get('phase', '')}
-Time remaining: {interaction.get('time_remaining', 'unknown')}
-User input: {interaction.get('user_input', '')}
-Coach response: {interaction.get('coach_response', '')}
-
-Evaluate for ADHD appropriateness:
-1. Clear structure and boundaries?
-2. Appropriate time awareness?
-3. Non-judgmental and supportive tone?
-4. Helps with executive function?
-5. Quality score (0.0 to 1.0)?
-
-Respond in JSON format:
-{{"score": 0.0-1.0, "structure": true/false, "time_aware": true/false, "supportive": true/false, "executive_support": true/false, "reasoning": "brief explanation"}}
-"""
+        # Use prompt manager to get evaluation prompt
+        from gtd_coach.prompts.manager import get_prompt_manager
+        prompt_manager = get_prompt_manager()
+        
+        # Get fully formatted prompt from Langfuse
+        prompt = prompt_manager.format_prompt(
+            "gtd-evaluation-coaching-quality",
+            {
+                "phase": interaction.get('phase', ''),
+                "time_remaining": interaction.get('time_remaining', 'unknown'),
+                "user_input": interaction.get('user_input', ''),
+                "coach_response": interaction.get('coach_response', '')
+            }
+        )
         
         try:
             # Use more sophisticated model for quality evaluation
@@ -412,14 +401,15 @@ Respond in JSON format:
         await self._send_to_langfuse(evaluation_summary)
     
     def _calculate_summary(self) -> Dict[str, Any]:
-        """Calculate summary statistics from evaluation results"""
+        """Calculate summary statistics from evaluation results with rule-based metrics"""
         if not self.evaluation_results:
             return {}
         
         summary = {
             'total_evaluations': len(self.evaluation_results),
             'average_scores': {},
-            'below_threshold': []
+            'below_threshold': [],
+            'rule_based_scores': {}
         }
         
         # Calculate averages for each metric
@@ -441,7 +431,83 @@ Respond in JSON format:
                         'threshold': threshold
                     })
         
+        # Add rule-based evaluations (no LLM needed)
+        summary['rule_based_scores'] = self._calculate_rule_based_scores()
+        
         return summary
+    
+    def _calculate_rule_based_scores(self) -> Dict[str, float]:
+        """
+        Calculate rule-based scores without using LLMs
+        Simple, fast metrics for session effectiveness
+        """
+        scores = {}
+        
+        # Calculate task capture effectiveness
+        # Count how many interactions resulted in task extraction
+        interactions_with_tasks = sum(
+            1 for r in self.evaluation_results 
+            if 'task_extraction' in r and r.get('phase') == 'MIND_SWEEP'
+        )
+        total_mind_sweep = sum(
+            1 for r in self.evaluation_results 
+            if r.get('phase') == 'MIND_SWEEP'
+        )
+        
+        if total_mind_sweep > 0:
+            scores['task_capture_rate'] = interactions_with_tasks / total_mind_sweep
+        else:
+            scores['task_capture_rate'] = 0.0
+        
+        # Calculate interrupt handling quality
+        # Good interrupts happen at phase boundaries, bad ones mid-phase
+        good_interrupts = sum(
+            1 for r in self.evaluation_results
+            if r.get('phase') in ['STARTUP', 'WRAP_UP'] and r.get('user_input')
+        )
+        total_interrupts = sum(
+            1 for r in self.evaluation_results
+            if r.get('user_input')
+        )
+        
+        if total_interrupts > 0:
+            scores['interrupt_quality'] = good_interrupts / total_interrupts
+        else:
+            scores['interrupt_quality'] = 1.0  # No interrupts is good
+        
+        # Calculate phase completion rate
+        expected_phases = ['STARTUP', 'MIND_SWEEP', 'PROJECT_REVIEW', 'PRIORITIZATION', 'WRAP_UP']
+        completed_phases = set(r.get('phase') for r in self.evaluation_results if r.get('phase'))
+        scores['phase_completion_rate'] = len(completed_phases) / len(expected_phases)
+        
+        # Calculate session completion
+        has_wrap_up = any(r.get('phase') == 'WRAP_UP' for r in self.evaluation_results)
+        scores['session_completed'] = 1.0 if has_wrap_up else 0.0
+        
+        # Calculate memory utilization (if available)
+        interactions_with_memory = sum(
+            1 for r in self.evaluation_results
+            if 'memory_relevance' in r
+        )
+        total_interactions = len(self.evaluation_results)
+        
+        if total_interactions > 0:
+            scores['memory_utilization'] = interactions_with_memory / total_interactions
+        else:
+            scores['memory_utilization'] = 0.0
+        
+        # Calculate overall session effectiveness
+        # Weighted average of key metrics
+        effectiveness = (
+            scores['session_completed'] * 0.3 +
+            scores['phase_completion_rate'] * 0.3 +
+            scores['task_capture_rate'] * 0.2 +
+            scores['interrupt_quality'] * 0.1 +
+            scores['memory_utilization'] * 0.1
+        )
+        scores['session_effectiveness'] = round(effectiveness, 3)
+        
+        return scores
     
     async def _send_to_langfuse(self, evaluation_summary: Dict[str, Any]):
         """Send evaluation scores to Langfuse"""
@@ -466,7 +532,18 @@ Respond in JSON format:
                     comment=f"Post-session evaluation for {metric}"
                 )
             
-            logger.info("Evaluation scores sent to Langfuse")
+            # Send rule-based scores (fast, no LLM needed)
+            for metric, score in evaluation_summary['summary'].get('rule_based_scores', {}).items():
+                langfuse.create_score(
+                    trace_id=self.session_id,
+                    name=f"rule_{metric}",
+                    value=score,
+                    data_type="NUMERIC",
+                    comment=f"Rule-based evaluation for {metric}"
+                )
+            
+            logger.info(f"Sent {len(evaluation_summary['summary'].get('average_scores', {}))} LLM scores and "
+                      f"{len(evaluation_summary['summary'].get('rule_based_scores', {}))} rule-based scores to Langfuse")
             
         except ImportError:
             logger.warning("Langfuse not installed, skipping score upload")

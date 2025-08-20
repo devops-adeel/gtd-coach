@@ -203,17 +203,22 @@ def confirm_completion_tool(
         print(f"Summary: {summary}")
         return True
     
-    # Build confirmation prompt
+    # Use prompt manager to get phase completion prompt
+    from gtd_coach.prompts.manager import get_prompt_manager
+    prompt_manager = get_prompt_manager()
+    
+    # Build confirmation prompt from Langfuse template
     time_remaining = _get_time_remaining(state)
     
-    prompt = f"""
-Phase Complete: {phase}
-{'-' * 40}
-{summary}
-
-Time remaining: {time_remaining} minutes
-
-Ready to continue to next phase?"""
+    prompt = prompt_manager.format_prompt(
+        "gtd-phase-completion",
+        {
+            "phase": phase,
+            "separator": '-' * 40,
+            "summary": summary,
+            "time_remaining": time_remaining
+        }
+    )
     
     # Use structured input for confirmation
     result = structured_input_tool.invoke({
