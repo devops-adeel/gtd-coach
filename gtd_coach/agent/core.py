@@ -11,7 +11,8 @@ from datetime import datetime
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_core.messages.utils import trim_messages, count_tokens_approximately
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, Runnable
+from langchain_core.language_models import BaseChatModel
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.memory import InMemorySaver
@@ -20,6 +21,65 @@ from pathlib import Path
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
+
+
+class PromptLinkedLLM:
+    """
+    Simple wrapper for ChatOpenAI that links Langfuse prompts to generations.
+    Uses composition instead of inheritance for simplicity.
+    """
+    
+    def __init__(self, llm: ChatOpenAI, prompt_object: Optional[Any] = None):
+        """
+        Initialize the wrapper
+        
+        Args:
+            llm: The underlying ChatOpenAI instance
+            prompt_object: Langfuse prompt object to link
+        """
+        self.llm = llm
+        self.prompt_object = prompt_object
+        self._original_generate = llm._generate
+        self._original_stream = llm._stream
+        
+        # Replace the generate and stream methods with our wrapped versions
+        llm._generate = self._wrapped_generate
+        llm._stream = self._wrapped_stream
+        
+    def _wrapped_generate(self, messages, stop=None, run_manager=None, **kwargs):
+        """Generate with prompt linking"""
+        # If we have a prompt object and Langfuse context is available, link it
+        if self.prompt_object:
+            try:
+                from langfuse.decorators import langfuse_context
+                # Update the current observation with the prompt
+                langfuse_context.update_current_observation(
+                    prompt=self.prompt_object
+                )
+                logger.debug("Linked Langfuse prompt to current generation")
+            except ImportError:
+                pass
+            except Exception as e:
+                logger.debug(f"Could not link prompt: {e}")
+        
+        # Call original generate
+        return self._original_generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+    
+    def _wrapped_stream(self, messages, stop=None, run_manager=None, **kwargs):
+        """Stream with prompt linking"""
+        # Link prompt if available
+        if self.prompt_object:
+            try:
+                from langfuse.decorators import langfuse_context
+                langfuse_context.update_current_observation(
+                    prompt=self.prompt_object
+                )
+                logger.debug("Linked Langfuse prompt to streaming generation")
+            except:
+                pass
+        
+        # Call original stream
+        return self._original_stream(messages, stop=stop, run_manager=run_manager, **kwargs)
 
 
 class GTDAgent:
@@ -47,7 +107,8 @@ class GTDAgent:
                  lm_studio_url: str = "http://localhost:1234/v1",
                  model_name: str = "xlam-7b-fc-r",  # Default to xLAM function calling model
                  checkpoint_dir: Optional[Path] = None,
-                 use_memory_saver: bool = False):
+                 use_memory_saver: bool = False,
+                 prompt_object: Optional[Any] = None):
         """
         Initialize the GTD Agent
         
@@ -56,12 +117,21 @@ class GTDAgent:
             model_name: Model identifier
             checkpoint_dir: Directory for SQLite checkpoints
             use_memory_saver: Use in-memory checkpointer (for testing)
+            prompt_object: Optional Langfuse prompt object for linking
         """
         self.lm_studio_url = lm_studio_url
         self.model_name = model_name
+        self.prompt_object = prompt_object  # Store for later use in tracing
         
         # Initialize LLM client for LM Studio
         self.llm = self._create_lm_studio_client()
+        
+        # Apply prompt linking wrapper if prompt object provided (modifies LLM in place)
+        if prompt_object:
+            self.prompt_wrapper = PromptLinkedLLM(self.llm, prompt_object)
+            logger.info("Using prompt-linked LLM wrapper for Langfuse integration")
+        else:
+            self.prompt_wrapper = None
         
         # Set up checkpointer
         if use_memory_saver:

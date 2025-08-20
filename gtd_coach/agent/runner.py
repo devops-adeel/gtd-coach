@@ -8,9 +8,10 @@ import logging
 import asyncio
 import sys
 import os
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from contextlib import nullcontext
 from dotenv import load_dotenv
 
@@ -61,6 +62,21 @@ class GTDAgentRunner:
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.user_id = datetime.now().strftime("%G-W%V")  # Weekly user ID
         
+        # Initialize prompt manager and fetch prompt object for linking
+        self.prompt_object = None
+        try:
+            from gtd_coach.prompts.manager import get_prompt_manager
+            prompt_manager = get_prompt_manager()
+            # Fetch the raw prompt object (not just formatted string) for Langfuse linking
+            if hasattr(prompt_manager, 'langfuse') and prompt_manager.langfuse:
+                self.prompt_object = prompt_manager.langfuse.get_prompt(
+                    "gtd-coach-system",
+                    label="production"
+                )
+                logger.info("Fetched Langfuse prompt object for linking")
+        except Exception as e:
+            logger.warning(f"Could not fetch Langfuse prompt object: {e}")
+        
         # Initialize components with correct LM Studio URL and model
         # Fix: Ensure /v1 is included in the URL
         lm_studio_url = os.getenv('LM_STUDIO_URL', 'http://host.docker.internal:1234')
@@ -68,15 +84,75 @@ class GTDAgentRunner:
             lm_studio_url = f"{lm_studio_url}/v1"
         self.model_name = os.getenv('LM_STUDIO_MODEL', 'meta-llama-3.1-8b-instruct')  # Store as instance variable
         logger.info(f"Configuring LM Studio: URL={lm_studio_url}, Model={self.model_name}")
-        self.agent = GTDAgent(lm_studio_url=lm_studio_url, model_name=self.model_name)
+        self.agent = GTDAgent(
+            lm_studio_url=lm_studio_url, 
+            model_name=self.model_name,
+            prompt_object=self.prompt_object  # Pass prompt object for linking
+        )
         self.memory = GraphitiMemory(session_id=self.session_id)
         self.pattern_detector = ADHDPatternDetector()
+        
+        # Initialize Graphiti memory connection asynchronously
+        self.user_facts_cache = None
+        self.cache_time = 0
+        self.cache_ttl = int(os.getenv('GRAPHITI_USER_FACTS_CACHE_TTL', '86400'))  # 24 hours default
         
         # Set tools on agent - use ESSENTIAL_TOOLS for now
         self.agent.set_tools(ESSENTIAL_TOOLS)
         logger.info(f"Using essential tool set ({len(ESSENTIAL_TOOLS)} tools)")
         
         logger.info(f"Initialized GTD Agent Runner - Session: {self.session_id}")
+    
+    async def get_user_facts_cached(self) -> List[str]:
+        """
+        Fetch and cache user facts from Graphiti for dynamic prompt personalization
+        
+        Returns:
+            List of relevant user facts (strings)
+        """
+        # Check if cache is still valid
+        if self.user_facts_cache and (time.time() - self.cache_time < self.cache_ttl):
+            logger.debug("Using cached user facts")
+            return self.user_facts_cache
+        
+        # Initialize Graphiti if not already done
+        if not self.memory.is_configured():
+            try:
+                await self.memory.initialize()
+                logger.info("Initialized Graphiti memory connection")
+            except Exception as e:
+                logger.warning(f"Could not initialize Graphiti: {e}")
+                return []
+        
+        # Fetch fresh facts from Graphiti
+        try:
+            # Search for user patterns, preferences, and history
+            search_query = f"user {self.user_id} patterns preferences history weekly review ADHD"
+            results = await self.memory.search_with_context(
+                query=search_query,
+                num_results=5  # Limit to top 5 most relevant facts
+            )
+            
+            # Extract facts as strings
+            facts = []
+            for result in results:
+                if hasattr(result, 'fact'):
+                    facts.append(result.fact)
+                elif hasattr(result, 'content'):
+                    facts.append(result.content)
+                elif isinstance(result, dict) and 'fact' in result:
+                    facts.append(result['fact'])
+            
+            # Cache the results
+            self.user_facts_cache = facts
+            self.cache_time = time.time()
+            
+            logger.info(f"Retrieved {len(facts)} user facts from Graphiti")
+            return facts
+            
+        except Exception as e:
+            logger.warning(f"Error fetching user facts from Graphiti: {e}")
+            return []
     
     def setup_logging(self):
         """Configure logging for the session"""
@@ -194,6 +270,9 @@ class GTDAgentRunner:
             Exit code (0 for success)
         """
         try:
+            # Track session start time for metrics
+            session_start_time = time.time()
+            
             # Initialize enhanced tracer if available
             tracer = None
             callbacks = []
@@ -214,6 +293,8 @@ class GTDAgentRunner:
                     set_global_tracer(tracer)
                     
                     # Get Langfuse handler for callbacks
+                    # IMPORTANT: Handler is created without parameters per Langfuse v3 pattern
+                    # Session ID is passed via config metadata instead
                     langfuse_handler = tracer.get_handler()
                     if langfuse_handler:
                         callbacks = [langfuse_handler]
@@ -232,7 +313,10 @@ class GTDAgentRunner:
                 "metadata": {
                     "langfuse_session_id": self.session_id,  # Required for Langfuse session tracking
                     "user_id": self.user_id,
-                    "workflow_type": "weekly_review"
+                    "workflow_type": "weekly_review",
+                    # Add prompt metadata for tracing
+                    "prompt_name": "gtd-coach-system" if not self.prompt_object else self.prompt_object.name,
+                    "prompt_version": None if not self.prompt_object else getattr(self.prompt_object, 'version', None)
                 },
                 "recursion_limit": 150  # Ensure agent has enough steps for full conversation
             }
@@ -243,10 +327,47 @@ class GTDAgentRunner:
                 state = None  # Agent will load from checkpoint
             else:
                 logger.info("Starting new weekly review")
-                # Start with minimal state to debug streaming issue
-                state = {
-                    "messages": [
-                        SystemMessage(content="""You are a GTD coach helping with a weekly review process that has 5 phases: STARTUP, MIND_SWEEP, PROJECT_REVIEW, PRIORITIZATION, and WRAP_UP.
+                
+                # Get system prompt from Langfuse
+                from gtd_coach.prompts.manager import get_prompt_manager
+                prompt_manager = get_prompt_manager()
+                
+                # Fetch user facts from Graphiti for personalization
+                user_facts = []
+                try:
+                    user_facts = asyncio.run(self.get_user_facts_cached())
+                    if user_facts:
+                        logger.info(f"Enriching prompt with {len(user_facts)} user facts")
+                except Exception as e:
+                    logger.warning(f"Could not fetch user facts: {e}")
+                
+                # Format user facts for inclusion in prompt
+                user_context = ""
+                if user_facts:
+                    user_context = "\n\nPERSONALIZED CONTEXT FROM PREVIOUS SESSIONS:\n"
+                    user_context += "\n".join([f"- {fact}" for fact in user_facts[:5]])  # Limit to 5 facts
+                    user_context += "\n"
+                
+                # Get the weekly review system prompt with user context
+                prompt_variables = {
+                    "current_phase": "STARTUP",
+                    "time_elapsed": 0,
+                    "time_remaining": 30,  # Total session time
+                    "user_context": user_context  # Add user facts as a variable
+                }
+                
+                # Try to use user_context if the prompt template supports it
+                system_prompt = prompt_manager.format_prompt(
+                    "gtd-coach-system",
+                    prompt_variables
+                )
+                
+                # If user_context wasn't in the template, append it manually
+                if user_context and "PERSONALIZED CONTEXT" not in system_prompt:
+                    system_prompt = system_prompt + user_context
+                
+                # Add critical instructions for conversation flow
+                system_prompt += """
 
 CRITICAL INSTRUCTIONS FOR CONVERSATION FLOW:
 1. After calling transition_phase_v2, you MUST use one of the conversation tools to continue
@@ -270,7 +391,12 @@ AVAILABLE CONVERSATION TOOLS:
 - confirm_with_user_v2(message): Get yes/no confirmation
 
 IMPORTANT: The conversation tools will pause execution and wait for user input.
-Never end the conversation without using these tools to engage the user."""),
+Never end the conversation without using these tools to engage the user."""
+                
+                # Start with minimal state to debug streaming issue
+                state = {
+                    "messages": [
+                        SystemMessage(content=system_prompt),
                         HumanMessage(content="Let's start the GTD weekly review.")
                     ]
                 }
@@ -450,6 +576,40 @@ Never end the conversation without using these tools to engage the user."""),
                             "attempts": tracer.metrics["interrupt_attempts"]
                         }
                     )
+                
+                # Add session effectiveness scoring
+                session_duration_minutes = (time.time() - session_start_time) / 60
+                session_completed = stream_completed and interrupt_count > 0
+                
+                # Extract metrics from last_result (final state)
+                if last_result:
+                    captures_count = len(last_result.get("captures", []))
+                    priorities_count = len(last_result.get("weekly_priorities", []))
+                else:
+                    captures_count = 0
+                    priorities_count = 0
+                
+                # Calculate effectiveness score
+                effectiveness_score = 1.0 if session_completed else 0.0
+                if captures_count > 0:
+                    effectiveness_score = min(1.0, effectiveness_score + 0.2)
+                if priorities_count > 0:
+                    effectiveness_score = min(1.0, effectiveness_score + 0.3)
+                if session_duration_minutes <= 30:
+                    effectiveness_score = min(1.0, effectiveness_score + 0.2)
+                
+                # Trace session effectiveness
+                tracer.trace_event("session.effectiveness", {
+                    "completed": session_completed,
+                    "duration_minutes": session_duration_minutes,
+                    "tasks_captured": captures_count,
+                    "priorities_set": priorities_count,
+                    "interrupts_handled": interrupt_count
+                }, score=effectiveness_score)
+                
+                logger.info(f"Session effectiveness: {effectiveness_score:.2f} "
+                          f"(captured: {captures_count}, priorities: {priorities_count}, "
+                          f"duration: {session_duration_minutes:.1f}min)")
                 
                 # Flush events
                 tracer.flush()

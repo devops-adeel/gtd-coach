@@ -49,7 +49,9 @@ class LangfuseTracer:
             "tool_completions": 0,
             "stream_chunks": 0,
             "phase_transitions": 0,
-            "context_overflows": 0
+            "context_overflows": 0,
+            "memories_retrieved": 0,
+            "memories_used": 0
         }
         
         # Track interrupt state
@@ -63,7 +65,8 @@ class LangfuseTracer:
         if LANGFUSE_AVAILABLE:
             try:
                 # Create handler without parameters - session_id will be passed via config metadata
-                # This is the correct pattern for Langfuse v3 SDK
+                # This is the correct pattern for Langfuse v3 SDK per documentation
+                # Reference: https://langfuse.com/docs/integrations/langchain/tracing
                 self.handler = CallbackHandler()
                 self.langfuse_client = get_client()
                 logger.info(f"LangfuseTracer initialized for session {session_id}")
@@ -80,7 +83,7 @@ class LangfuseTracer:
         Trace a custom event with optional scoring
         
         Args:
-            event_type: Type of event (e.g., "interrupt.attempt", "tool.start")
+            event_type: Type of event (e.g., "interrupt.attempt", "tool.start", "memory.retrieved")
             data: Event data
             score: Optional score for the event
         """
@@ -88,7 +91,31 @@ class LangfuseTracer:
             return
         
         try:
-            # Create observation for the event
+            # Handle memory-specific events
+            if event_type.startswith("memory."):
+                if event_type == "memory.retrieved":
+                    # Track how many memories were retrieved
+                    count = data.get("count", 1) if data else 1
+                    self.metrics["memories_retrieved"] += count
+                    logger.debug(f"Retrieved {count} memories (total: {self.metrics['memories_retrieved']})")
+                    
+                elif event_type == "memory.used":
+                    # Track when a retrieved memory is actually used in response
+                    self.metrics["memories_used"] += 1
+                    logger.debug(f"Memory used (total: {self.metrics['memories_used']})")
+                    
+                    # Calculate and score memory hit rate
+                    if self.metrics["memories_retrieved"] > 0:
+                        hit_rate = self.metrics["memories_used"] / self.metrics["memories_retrieved"]
+                        self.langfuse_client.score(
+                            name="memory_hit_rate",
+                            value=hit_rate,
+                            comment=f"Used {self.metrics['memories_used']} of {self.metrics['memories_retrieved']} retrieved memories",
+                            data_type="NUMERIC"
+                        )
+                        logger.info(f"Memory hit rate: {hit_rate:.2%} ({self.metrics['memories_used']}/{self.metrics['memories_retrieved']})")
+            
+            # Create observation for the event (regular scoring)
             if score is not None:
                 self.langfuse_client.score(
                     name=event_type,
@@ -148,6 +175,64 @@ class LangfuseTracer:
             self.trace_event("interrupt.success_rate", {"rate": success_rate}, success_rate)
         
         logger.info(f"Interrupt captured: {interrupt_data}")
+    
+    @contextmanager
+    def span_interrupt(self, interrupt_type: str, prompt: str = None):
+        """
+        Context manager for tracing interrupt operations with custom spans
+        Following Langfuse documentation pattern
+        
+        Args:
+            interrupt_type: Type of interrupt (e.g., "check_in", "confirmation", "input")
+            prompt: Optional prompt being shown to user
+            
+        Example:
+            with tracer.span_interrupt("check_in", prompt="Ready to continue?"):
+                response = check_in_with_user()
+        """
+        if not self.langfuse_client:
+            yield None
+            return
+        
+        try:
+            # Create custom span for interrupt
+            from langfuse import Langfuse
+            langfuse = Langfuse()
+            
+            with langfuse.start_as_current_span(
+                name=f"🔔-interrupt-{interrupt_type}",
+                trace_context={"trace_id": self.session_id}
+            ) as span:
+                span.update_trace(
+                    input=prompt or f"Interrupt: {interrupt_type}",
+                    metadata={
+                        "interrupt_type": interrupt_type,
+                        "session_id": self.session_id,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                )
+                
+                start_time = time.time()
+                yield span
+                
+                # Update span with timing after completion
+                response_time = time.time() - start_time
+                span.update_trace(
+                    output=f"Interrupt handled in {response_time:.2f}s",
+                    metadata={"response_time_seconds": response_time}
+                )
+                
+                # Score the interrupt response time
+                span.score_trace(
+                    name="interrupt_response_time",
+                    value=response_time,
+                    data_type="NUMERIC",
+                    comment=f"{interrupt_type} interrupt"
+                )
+                
+        except Exception as e:
+            logger.debug(f"Failed to create interrupt span: {e}")
+            yield None
     
     def trace_interrupt_resume(self, user_input: str):
         """
@@ -227,7 +312,7 @@ class LangfuseTracer:
     
     def trace_phase_transition(self, from_phase: str, to_phase: str, duration: float = None):
         """
-        Trace phase transitions
+        Trace phase transitions with virtual agent context
         
         Args:
             from_phase: Previous phase
@@ -248,6 +333,76 @@ class LangfuseTracer:
         # Score phase duration if provided
         if duration:
             self.trace_event(f"phase.{from_phase.lower()}.duration", {"seconds": duration}, duration)
+            
+            # Add Langfuse score for phase completion
+            self.score_phase_completion(
+                phase=from_phase,
+                completed=True,
+                duration_seconds=duration
+            )
+        
+        # Create virtual agent span for the new phase
+        self._create_virtual_agent_span(to_phase)
+    
+    def score_phase_completion(self, phase: str, completed: bool, 
+                              duration_seconds: float = None):
+        """
+        Score a phase completion using Langfuse's scoring API
+        Following the pattern from the documentation
+        
+        Args:
+            phase: Name of the phase
+            completed: Whether phase was completed
+            duration_seconds: Actual duration
+        """
+        if not self.langfuse_client:
+            return
+        
+        try:
+            # Get expected duration for this phase
+            expected_durations = {
+                "STARTUP": 120,  # 2 minutes
+                "MIND_SWEEP": 600,  # 10 minutes
+                "PROJECT_REVIEW": 720,  # 12 minutes
+                "PRIORITIZATION": 300,  # 5 minutes
+                "WRAP_UP": 180  # 3 minutes
+            }
+            expected_duration = expected_durations.get(phase, 300)
+            
+            # Calculate time adherence score
+            time_score = 1.0
+            if duration_seconds:
+                # Perfect score if within time, declining as it goes over
+                if duration_seconds <= expected_duration:
+                    time_score = 1.0
+                else:
+                    # Reduce score based on how much over time
+                    overtime_ratio = (duration_seconds - expected_duration) / expected_duration
+                    time_score = max(0.0, 1.0 - (overtime_ratio * 0.5))  # 50% reduction per 100% overtime
+            
+            # Create phase completion score
+            self.langfuse_client.create_score(
+                trace_id=self.session_id,
+                name=f"phase_{phase.lower()}_completion",
+                value=1.0 if completed else 0.0,
+                data_type="NUMERIC",
+                comment=f"{phase} {'completed' if completed else 'incomplete'}"
+            )
+            
+            # Create time adherence score if we have timing data
+            if duration_seconds:
+                self.langfuse_client.create_score(
+                    trace_id=self.session_id,
+                    name=f"phase_{phase.lower()}_time_adherence",
+                    value=time_score,
+                    data_type="NUMERIC",
+                    comment=f"Expected: {expected_duration}s, Actual: {duration_seconds:.1f}s"
+                )
+            
+            logger.debug(f"Scored phase {phase}: completion={completed}, time_score={time_score:.2f}")
+            
+        except Exception as e:
+            logger.debug(f"Failed to score phase completion: {e}")
     
     def trace_graph_config(self, config: Dict):
         """
@@ -337,9 +492,83 @@ class LangfuseTracer:
                 self.metrics["tool_completions"] / self.metrics["tool_calls"]
                 if self.metrics["tool_calls"] > 0 else 0
             ),
+            "memory_hit_rate": (
+                self.metrics["memories_used"] / self.metrics["memories_retrieved"]
+                if self.metrics["memories_retrieved"] > 0 else 0
+            ),
             "pending_interrupts": len(self.interrupt_stack),
             "session_id": self.session_id
         }
+    
+    def _create_virtual_agent_span(self, phase: str):
+        """
+        Create a virtual agent span for specialized phase behavior
+        
+        Args:
+            phase: The phase name to create virtual agent for
+        """
+        if not self.langfuse_client:
+            return
+        
+        try:
+            from langfuse import Langfuse
+            langfuse = Langfuse()
+            
+            # Map phases to virtual agent types
+            virtual_agents = {
+                "STARTUP": {
+                    "name": "🎯 Executive Function Agent",
+                    "role": "Initialize focus and establish structure",
+                    "skills": ["routine_establishment", "energy_assessment", "focus_calibration"]
+                },
+                "MIND_SWEEP": {
+                    "name": "🧠 Capture Agent", 
+                    "role": "Extract and organize thoughts without judgment",
+                    "skills": ["rapid_capture", "non_judgmental_recording", "thought_clustering"]
+                },
+                "PROJECT_REVIEW": {
+                    "name": "📊 Analysis Agent",
+                    "role": "Review projects and identify patterns",
+                    "skills": ["project_status_tracking", "pattern_recognition", "progress_assessment"]
+                },
+                "PRIORITIZATION": {
+                    "name": "🎯 Decision Agent",
+                    "role": "Apply GTD criteria for priority selection",
+                    "skills": ["importance_scoring", "urgency_assessment", "capacity_matching"]
+                },
+                "WRAP_UP": {
+                    "name": "✅ Completion Agent",
+                    "role": "Ensure closure and prepare for next session",
+                    "skills": ["summary_generation", "commitment_tracking", "next_action_setup"]
+                }
+            }
+            
+            agent_info = virtual_agents.get(phase)
+            if not agent_info:
+                return
+            
+            # Create a custom span for the virtual agent
+            with langfuse.start_as_current_span(
+                name=agent_info["name"],
+                trace_context={"trace_id": self.session_id}
+            ) as span:
+                span.update_trace(
+                    input=f"Activating {phase} phase",
+                    metadata={
+                        "agent_type": "virtual",
+                        "phase": phase,
+                        "role": agent_info["role"],
+                        "skills": agent_info["skills"],
+                        "session_id": self.session_id,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                )
+                
+                # Log virtual agent activation
+                logger.info(f"Virtual agent activated: {agent_info['name']} for {phase}")
+                
+        except Exception as e:
+            logger.debug(f"Failed to create virtual agent span: {e}")
     
     def flush(self):
         """Flush any pending events to Langfuse"""
