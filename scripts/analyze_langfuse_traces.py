@@ -6,7 +6,7 @@ Analyze Langfuse traces to understand interrupt behavior in GTD Coach
 import os
 import sys
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 import json
 from dotenv import load_dotenv
 
@@ -190,6 +190,265 @@ def get_trace_details(trace_id: str):
     langfuse.flush()
 
 
+def analyze_phase_transition(trace_id: str, observations: List[Any]) -> Dict[str, Any]:
+    """
+    Analyze phase transitions within a trace to detect state loss and score changes
+    
+    Args:
+        trace_id: The trace ID being analyzed
+        observations: List of observations for the trace
+    
+    Returns:
+        Dict containing transition analysis
+    """
+    transitions = []
+    current_phase = None
+    current_state = {}
+    
+    for i, obs in enumerate(observations):
+        # Extract phase from observation metadata or input
+        phase = None
+        if obs.metadata and isinstance(obs.metadata, dict):
+            phase = obs.metadata.get('phase') or obs.metadata.get('current_phase')
+        elif obs.input and isinstance(obs.input, dict):
+            phase = obs.input.get('phase') or obs.input.get('current_phase')
+        
+        # Detect phase transition
+        if phase and phase != current_phase and current_phase is not None:
+            transition = {
+                'from_phase': current_phase,
+                'to_phase': phase,
+                'timestamp': obs.start_time,
+                'observation_id': obs.id,
+                'state_before': current_state.copy()
+            }
+            
+            # Extract new state after transition
+            new_state = {}
+            if obs.output and isinstance(obs.output, dict):
+                new_state['tasks'] = obs.output.get('tasks', [])
+                new_state['projects'] = obs.output.get('projects', [])
+                new_state['priorities'] = obs.output.get('priorities', [])
+            
+            transition['state_after'] = new_state
+            
+            # Check for state loss
+            state_lost = []
+            for key in ['tasks', 'projects', 'priorities']:
+                if key in current_state and current_state[key] and key in new_state and not new_state[key]:
+                    state_lost.append(key)
+            
+            transition['state_lost'] = state_lost
+            transitions.append(transition)
+            
+            current_state = new_state
+        
+        current_phase = phase
+        
+        # Update current state from observations
+        if obs.output and isinstance(obs.output, dict):
+            if 'tasks' in obs.output:
+                current_state['tasks'] = obs.output['tasks']
+            if 'projects' in obs.output:
+                current_state['projects'] = obs.output['projects']
+            if 'priorities' in obs.output:
+                current_state['priorities'] = obs.output['priorities']
+    
+    return transitions
+
+
+def extract_prompt_metadata(observations: List[Any]) -> Dict[str, Any]:
+    """
+    Extract prompt information from generation observations
+    
+    Args:
+        observations: List of observations
+    
+    Returns:
+        Dict containing prompt usage statistics
+    """
+    prompt_usage = {}
+    
+    for obs in observations:
+        if obs.type == "GENERATION" or (obs.name and "generation" in obs.name.lower()):
+            # Extract prompt info from metadata
+            prompt_name = None
+            prompt_version = None
+            prompt_variables = {}
+            
+            if obs.metadata and isinstance(obs.metadata, dict):
+                prompt_name = obs.metadata.get('prompt_name') or obs.metadata.get('prompt')
+                prompt_version = obs.metadata.get('prompt_version') or obs.metadata.get('version')
+                prompt_variables = obs.metadata.get('variables', {})
+            
+            # Also check input for prompt info
+            if obs.input and isinstance(obs.input, dict):
+                if not prompt_name:
+                    prompt_name = obs.input.get('prompt_name')
+                if 'messages' in obs.input:
+                    # Extract from messages if structured
+                    messages = obs.input['messages']
+                    if messages and isinstance(messages, list) and len(messages) > 0:
+                        # Look for system message that might contain prompt
+                        for msg in messages:
+                            if isinstance(msg, dict) and msg.get('role') == 'system':
+                                # Try to identify prompt from content patterns
+                                content = msg.get('content', '')
+                                if 'gtd' in content.lower() or 'coach' in content.lower():
+                                    if 'firm' in content.lower():
+                                        prompt_name = prompt_name or 'gtd-coach-firm'
+                                    elif 'gentle' in content.lower():
+                                        prompt_name = prompt_name or 'gtd-coach-gentle'
+                                    elif 'simple' in content.lower():
+                                        prompt_name = prompt_name or 'gtd-coach-simple'
+            
+            if prompt_name:
+                if prompt_name not in prompt_usage:
+                    prompt_usage[prompt_name] = {
+                        'count': 0,
+                        'versions': set(),
+                        'variables_used': [],
+                        'observation_ids': []
+                    }
+                
+                prompt_usage[prompt_name]['count'] += 1
+                if prompt_version:
+                    prompt_usage[prompt_name]['versions'].add(prompt_version)
+                if prompt_variables:
+                    prompt_usage[prompt_name]['variables_used'].append(prompt_variables)
+                prompt_usage[prompt_name]['observation_ids'].append(obs.id)
+    
+    # Convert sets to lists for JSON serialization
+    for prompt in prompt_usage.values():
+        prompt['versions'] = list(prompt['versions'])
+    
+    return prompt_usage
+
+
+def format_conversation_flow(observations: List[Any], show_metadata: bool = True) -> str:
+    """
+    Format observations into a human-readable conversation flow
+    
+    Args:
+        observations: List of observations
+        show_metadata: Whether to show inline metadata
+    
+    Returns:
+        Formatted conversation string
+    """
+    output = []
+    
+    for obs in observations:
+        timestamp = obs.start_time.strftime("%H:%M:%S") if obs.start_time else "??:??:??"
+        
+        # Determine the type of interaction
+        if obs.name and "check_in" in obs.name.lower():
+            output.append(f"\n[{timestamp}] 🔔 INTERRUPT - Agent checking in with user")
+        elif obs.name and "wait_for" in obs.name.lower():
+            output.append(f"\n[{timestamp}] ⏸️ WAITING for user input")
+        elif obs.type == "GENERATION":
+            output.append(f"\n[{timestamp}] 🤖 GENERATION")
+        
+        # Show input/output in conversational format
+        if obs.input:
+            if isinstance(obs.input, dict):
+                if 'messages' in obs.input:
+                    messages = obs.input['messages']
+                    if isinstance(messages, list):
+                        for msg in messages[-2:]:  # Show last 2 messages for context
+                            if isinstance(msg, dict):
+                                role = msg.get('role', 'unknown')
+                                content = msg.get('content', '')[:200]
+                                if role == 'user':
+                                    output.append(f"  👤 User: {content}")
+                                elif role == 'assistant':
+                                    output.append(f"  🤖 Agent: {content}")
+                elif 'query' in obs.input:
+                    output.append(f"  📝 Query: {obs.input['query'][:200]}")
+        
+        if obs.output:
+            if isinstance(obs.output, str):
+                output.append(f"  → Response: {obs.output[:200]}")
+            elif isinstance(obs.output, dict):
+                if '__interrupt__' in obs.output:
+                    output.append(f"  ⚠️ INTERRUPT TRIGGERED")
+                elif 'content' in obs.output:
+                    output.append(f"  → Response: {obs.output['content'][:200]}")
+        
+        # Show metadata if requested
+        if show_metadata and obs.metadata:
+            if isinstance(obs.metadata, dict):
+                phase = obs.metadata.get('phase', obs.metadata.get('current_phase'))
+                if phase:
+                    output.append(f"  📍 Phase: {phase}")
+                time_remaining = obs.metadata.get('time_remaining')
+                if time_remaining:
+                    output.append(f"  ⏱️ Time remaining: {time_remaining} min")
+    
+    return "\n".join(output)
+
+
+def validate_state_continuity(observations: List[Any]) -> Dict[str, Any]:
+    """
+    Validate that state is maintained properly across observations
+    
+    Args:
+        observations: List of observations
+    
+    Returns:
+        Dict containing validation results
+    """
+    validation_results = {
+        'state_losses': [],
+        'inconsistencies': [],
+        'warnings': []
+    }
+    
+    tracked_state = {
+        'tasks': [],
+        'projects': [],
+        'priorities': []
+    }
+    
+    for i, obs in enumerate(observations):
+        # Extract state from observation
+        current_state = {}
+        
+        if obs.output and isinstance(obs.output, dict):
+            for key in ['tasks', 'projects', 'priorities']:
+                if key in obs.output:
+                    current_state[key] = obs.output[key]
+        
+        # Check for state loss
+        for key in tracked_state:
+            if tracked_state[key] and key in current_state and not current_state[key]:
+                validation_results['state_losses'].append({
+                    'observation_id': obs.id,
+                    'timestamp': obs.start_time,
+                    'lost_item': key,
+                    'previous_value': tracked_state[key],
+                    'observation_name': obs.name
+                })
+        
+        # Update tracked state
+        for key in current_state:
+            tracked_state[key] = current_state[key]
+        
+        # Check for memory relevance issues
+        if obs.name and 'memory' in obs.name.lower():
+            if obs.metadata and isinstance(obs.metadata, dict):
+                relevance = obs.metadata.get('relevance_score', 1.0)
+                if relevance < 0.5:
+                    validation_results['warnings'].append({
+                        'type': 'low_memory_relevance',
+                        'observation_id': obs.id,
+                        'relevance_score': relevance,
+                        'timestamp': obs.start_time
+                    })
+    
+    return validation_results
+
+
 def analyze_test_failure(session_id: str, return_data: bool = False):
     """
     Analyze Langfuse traces for a failed test session - AI-optimized output
@@ -368,6 +627,169 @@ def analyze_test_failure(session_id: str, return_data: bool = False):
     print("="*80)
 
 
+def debug_session(session_id: str, focus: str = "all"):
+    """
+    Comprehensive debug mode for a session - combines all analysis features
+    
+    Args:
+        session_id: The session ID to debug
+        focus: What to focus on ('transitions', 'prompts', 'conversation', 'state', 'all')
+    """
+    print("\n" + "="*80)
+    print(f"🔍 DEBUGGING SESSION: {session_id}")
+    print("="*80)
+    
+    # Initialize Langfuse client
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+    host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+    
+    if not public_key or not secret_key:
+        print("❌ Error: LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY not found")
+        return
+    
+    langfuse = Langfuse(
+        public_key=public_key,
+        secret_key=secret_key,
+        host=host
+    )
+    
+    # Fetch traces for this session
+    traces = langfuse.get_traces(session_id=session_id, limit=50)
+    
+    if not traces:
+        print(f"❌ No traces found for session {session_id}")
+        return
+    
+    print(f"📊 Found {len(traces)} traces in session\n")
+    
+    issues_found = []
+    
+    for trace in traces:
+        print(f"\n--- Analyzing Trace: {trace.name} ({trace.id[:8]}...) ---")
+        
+        # Get observations for detailed analysis
+        observations = langfuse.get_observations(trace_id=trace.id)
+        
+        if not observations:
+            print("  ⚠️ No observations found for this trace")
+            continue
+        
+        # Get scores for this trace
+        scores = langfuse.get_scores(trace_id=trace.id)
+        score_dict = {}
+        if scores:
+            for score in scores:
+                score_dict[score.name] = score.value
+        
+        # 1. PHASE TRANSITION ANALYSIS
+        if focus in ["transitions", "all"]:
+            print("\n📍 PHASE TRANSITIONS:")
+            transitions = analyze_phase_transition(trace.id, observations)
+            if transitions:
+                for trans in transitions:
+                    print(f"  {trans['from_phase']} → {trans['to_phase']}")
+                    if trans['state_lost']:
+                        print(f"    ❌ STATE LOST: {', '.join(trans['state_lost'])}")
+                        issues_found.append(f"State loss during {trans['from_phase']} → {trans['to_phase']}")
+                    
+                    # Check scores around transition
+                    print(f"    Scores at transition:")
+                    for score_name, score_value in score_dict.items():
+                        if score_value < 0.5:
+                            print(f"      ⚠️ {score_name}: {score_value:.2f}")
+                        else:
+                            print(f"      ✅ {score_name}: {score_value:.2f}")
+            else:
+                print("  No phase transitions detected")
+        
+        # 2. PROMPT ANALYSIS
+        if focus in ["prompts", "all"]:
+            print("\n🎯 PROMPT USAGE:")
+            prompt_usage = extract_prompt_metadata(observations)
+            if prompt_usage:
+                for prompt_name, usage in prompt_usage.items():
+                    print(f"  {prompt_name}:")
+                    print(f"    Used {usage['count']} times")
+                    if usage['versions']:
+                        print(f"    Versions: {', '.join(map(str, usage['versions']))}")
+                    
+                    # Correlate with scores
+                    if score_dict:
+                        avg_score = sum(score_dict.values()) / len(score_dict) if score_dict else 0
+                        if avg_score < 0.5:
+                            print(f"    ⚠️ Low average score with this prompt: {avg_score:.2f}")
+                            issues_found.append(f"Low scores with prompt {prompt_name}")
+            else:
+                print("  No prompt metadata found")
+        
+        # 3. CONVERSATION FLOW
+        if focus in ["conversation", "all"]:
+            print("\n💬 CONVERSATION FLOW:")
+            conversation = format_conversation_flow(observations, show_metadata=True)
+            if len(conversation) > 1000:
+                # Show abbreviated version for long conversations
+                lines = conversation.split('\n')
+                print('\n'.join(lines[:10]))
+                print(f"  ... ({len(lines) - 20} lines omitted) ...")
+                print('\n'.join(lines[-10:]))
+            else:
+                print(conversation)
+        
+        # 4. STATE VALIDATION
+        if focus in ["state", "all"]:
+            print("\n✔️ STATE VALIDATION:")
+            validation = validate_state_continuity(observations)
+            if validation['state_losses']:
+                print("  ❌ STATE LOSSES DETECTED:")
+                for loss in validation['state_losses']:
+                    print(f"    - Lost {loss['lost_item']} at {loss['timestamp']}")
+                    print(f"      Previous value: {loss['previous_value'][:100] if isinstance(loss['previous_value'], str) else loss['previous_value']}")
+                    issues_found.append(f"State loss: {loss['lost_item']}")
+            else:
+                print("  ✅ No state losses detected")
+            
+            if validation['warnings']:
+                print("  ⚠️ WARNINGS:")
+                for warning in validation['warnings']:
+                    if warning['type'] == 'low_memory_relevance':
+                        print(f"    - Low memory relevance: {warning['relevance_score']:.2f}")
+                        issues_found.append("Low memory relevance")
+    
+    # SUMMARY AND RECOMMENDATIONS
+    print("\n" + "="*80)
+    print("📋 SUMMARY")
+    print("="*80)
+    
+    if issues_found:
+        print("\n⚠️ ISSUES FOUND:")
+        unique_issues = list(set(issues_found))
+        for i, issue in enumerate(unique_issues, 1):
+            print(f"  {i}. {issue}")
+        
+        print("\n💡 SUGGESTED FIXES:")
+        for issue in unique_issues:
+            if "State loss" in issue:
+                print(f"  • {issue}: Check prompt templates for missing state variables")
+                print(f"    - Ensure {{tasks}}, {{projects}}, {{priorities}} are passed to prompts")
+                print(f"    - Verify checkpoint/persistence in LangGraph configuration")
+            elif "Low scores" in issue:
+                print(f"  • {issue}: Consider adjusting prompt parameters")
+                print(f"    - Review temperature settings")
+                print(f"    - Check if prompt version is appropriate for the phase")
+            elif "Low memory relevance" in issue:
+                print(f"  • {issue}: Review memory retrieval queries")
+                print(f"    - Ensure phase-specific memory filtering")
+                print(f"    - Check embedding quality and similarity thresholds")
+    else:
+        print("\n✅ No critical issues detected in this session")
+    
+    langfuse.flush()
+    print("\n" + "="*80)
+    print("Debug analysis complete!")
+    print("="*80)
+
+
 if __name__ == "__main__":
     import argparse
     
@@ -377,11 +799,50 @@ if __name__ == "__main__":
     parser.add_argument("--trace", type=str, help="Specific trace ID to get details")
     parser.add_argument("--test-failure", type=str, help="Analyze a test failure session with AI-optimized output")
     
+    # New debugging options
+    parser.add_argument("--debug", type=str, help="Debug a session comprehensively")
+    parser.add_argument("--show-transitions", action="store_true", help="Focus on phase transitions")
+    parser.add_argument("--prompt-analysis", action="store_true", help="Analyze prompt usage and performance")
+    parser.add_argument("--show-conversation", action="store_true", help="Display conversation flow")
+    parser.add_argument("--validate-state", action="store_true", help="Check for state continuity issues")
+    
     args = parser.parse_args()
     
-    if args.test_failure:
+    # Handle new debug modes
+    if args.debug:
+        # Determine focus based on other flags
+        focus = "all"
+        if args.show_transitions:
+            focus = "transitions"
+        elif args.prompt_analysis:
+            focus = "prompts"
+        elif args.show_conversation:
+            focus = "conversation"
+        elif args.validate_state:
+            focus = "state"
+        
+        debug_session(args.debug, focus)
+    elif args.test_failure:
         analyze_test_failure(args.test_failure)
     elif args.trace:
         get_trace_details(args.trace)
+    elif args.session:
+        # If specific analysis flags are set with session
+        if args.show_transitions or args.prompt_analysis or args.show_conversation or args.validate_state:
+            focus = []
+            if args.show_transitions:
+                focus.append("transitions")
+            if args.prompt_analysis:
+                focus.append("prompts")
+            if args.show_conversation:
+                focus.append("conversation")
+            if args.validate_state:
+                focus.append("state")
+            
+            # Use debug_session with specific focus
+            debug_session(args.session, focus=",".join(focus) if focus else "all")
+        else:
+            # Default session analysis
+            analyze_recent_traces(hours_back=args.hours, session_id=args.session)
     else:
         analyze_recent_traces(hours_back=args.hours, session_id=args.session)
