@@ -20,7 +20,7 @@ from graphiti_core.nodes import EpisodeType
 
 # Import Langfuse OpenAI wrapper for tracing embeddings
 try:
-    from langfuse.openai import OpenAI as LangfuseOpenAI
+    from langfuse.openai import AsyncOpenAI as LangfuseAsyncOpenAI
     LANGFUSE_AVAILABLE = True
 except ImportError:
     LANGFUSE_AVAILABLE = False
@@ -50,24 +50,24 @@ logger = logging.getLogger(__name__)
 
 class TracedOpenAIEmbedder(OpenAIEmbedder):
     """
-    Custom OpenAI embedder that uses Langfuse-wrapped client for tracing
+    Custom OpenAI embedder that uses Langfuse-wrapped async client for tracing
     """
     
     def __init__(self, config: OpenAIEmbedderConfig):
         """Initialize embedder with Langfuse tracing if available"""
         super().__init__(config)
         
-        # Replace the internal OpenAI client with Langfuse-wrapped version
+        # Replace the internal OpenAI client with Langfuse-wrapped async version
         if LANGFUSE_AVAILABLE:
             try:
-                # Create Langfuse-wrapped OpenAI client
-                self.client = LangfuseOpenAI(
+                # Create Langfuse-wrapped AsyncOpenAI client for async operations
+                self.client = LangfuseAsyncOpenAI(
                     api_key=config.api_key,
                     base_url=config.base_url if hasattr(config, 'base_url') else None
                 )
-                logger.info("✅ Embeddings will be traced with Langfuse")
+                logger.info("✅ Embeddings will be traced with Langfuse (async)")
             except Exception as e:
-                logger.warning(f"Failed to initialize Langfuse OpenAI wrapper: {e}")
+                logger.warning(f"Failed to initialize Langfuse AsyncOpenAI wrapper: {e}")
                 # Fall back to regular OpenAI client (parent class already initialized it)
 
 
