@@ -34,7 +34,7 @@ WEEKLY REVIEW PROTOCOL:
 3. PROJECT REVIEW (Max 12 minutes):
    - Display projects sorted by last week's time investment
    - For each project (max 1 minute each):
-     * "Project X: What's the next action? 45 seconds."
+     * "{project_name}: What's the next action? 45 seconds."
      * At 30 seconds: "15 seconds - quick decision"
      * At 45 seconds: "Time's up. Mark as 'needs clarification' and move on."
    - Track projects skipped 3+ weeks: "This has been avoided 3 times. One tiny next action?"
