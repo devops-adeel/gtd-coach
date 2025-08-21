@@ -422,6 +422,53 @@ class TimingAPI:
             'focus_metrics': focus_metrics,
             'switch_analysis': switch_analysis
         }
+    
+    def get_weekly_project_names(self) -> Dict:
+        """Get suggested project names for manual creation in Timing
+        
+        Returns the 3 project names to create manually:
+        1. Deep Work - Week XX
+        2. Admin & Communication  
+        3. Reactive & Urgent
+        
+        Returns:
+            Dict with suggested project names and week info
+        """
+        # Get current week number
+        week_num = datetime.now().isocalendar()[1]
+        year = datetime.now().year
+        
+        return {
+            "week": week_num,
+            "year": year,
+            "projects": [
+                {
+                    "title": f"Deep Work - Week {week_num} ({year})",
+                    "color": "Green",
+                    "productivity": "High",
+                    "description": "Focused deep work sessions"
+                },
+                {
+                    "title": "Admin & Communication",
+                    "color": "Orange", 
+                    "productivity": "Neutral",
+                    "description": "Email, Slack, meetings"
+                },
+                {
+                    "title": "Reactive & Urgent",
+                    "color": "Red",
+                    "productivity": "Low",
+                    "description": "Interruptions and firefighting"
+                }
+            ],
+            "instructions": (
+                "Create these 3 projects manually in Timing:\n"
+                "1. Open Timing app\n"
+                "2. Click '+' to add new project\n"
+                "3. Set name, color, and productivity score\n"
+                "4. Drag activities to assign them to projects"
+            )
+        }
 
 
 def get_mock_projects() -> List[Dict]:

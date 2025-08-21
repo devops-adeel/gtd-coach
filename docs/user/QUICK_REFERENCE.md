@@ -6,8 +6,11 @@
 # Weekly Review (30 min)
 ./scripts/deployment/docker-run.sh
 
-# Daily Capture (10 min)  
-python -m gtd_coach capture
+# Daily Clarify (5-10 min) - NEW!
+python3 -m gtd_coach.commands.daily_clarify
+
+# Test Reality Check (1 min)
+python3 test_timing_read.py
 
 # Resume Interrupted Session
 python -m gtd_coach --resume
@@ -64,10 +67,10 @@ LM_STUDIO_URL=http://localhost:1234/v1
 LM_STUDIO_MODEL=meta-llama-3.1-8b-instruct
 
 # Optional Integrations
-TIMING_API_KEY=...        # Focus metrics
+TODOIST_API_KEY=...       # Inbox processing (NEW!)
+TIMING_API_KEY=...        # Reality checks (read-only)
 LANGFUSE_PUBLIC_KEY=...   # Observability
 FALKORDB_HOST=localhost   # Memory graph
-TODOIST_API_KEY=...       # Task sync
 ```
 
 ## Docker Commands
@@ -92,6 +95,9 @@ docker compose build --no-cache
 **No audio?** → macOS terminal permissions  
 **Lost data?** → Check `data/` folder  
 **Interrupted?** → Use `--resume` flag  
+**Todoist empty?** → Check project ID or use auto-detect  
+**Timing 401?** → Normal - create 3 projects manually  
+**No reality check?** → Run `test_timing_read.py` to verify  
 
 ---
 *Keep this handy during reviews!*

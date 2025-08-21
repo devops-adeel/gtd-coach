@@ -132,6 +132,49 @@ class GraphitiMemory:
         except Exception as e:
             logger.warning(f"Failed to create user node: {e}")
             # Continue without user context - not critical
+    
+    async def get_user_context(self) -> Dict[str, Any]:
+        """
+        Get user context from memory for personalization
+        
+        Returns:
+            Dict with user patterns, preferences, and ADHD indicators
+        """
+        context = {
+            "adhd_severity": "medium",  # Default
+            "recurring_patterns": [],
+            "preferred_contexts": [],
+            "energy_patterns": {},
+            "task_switching_frequency": self.context_switch_count
+        }
+        
+        # If Graphiti is available, search for user patterns
+        if self.graphiti_client:
+            try:
+                # Search for recent patterns
+                results = await self.graphiti_client.search(
+                    query="ADHD patterns user behavior",
+                    num_results=5,
+                    group_ids=[self.session_group_id]
+                )
+                
+                # Extract patterns from results
+                for result in results:
+                    if hasattr(result, 'fact') and "pattern" in str(result.fact):
+                        pattern_str = str(result.fact)
+                        if pattern_str not in context["recurring_patterns"]:
+                            context["recurring_patterns"].append(pattern_str)
+                
+                # Determine ADHD severity based on switch count
+                if self.context_switch_count > 10:
+                    context["adhd_severity"] = "high"
+                elif self.context_switch_count < 3:
+                    context["adhd_severity"] = "low"
+                    
+            except Exception as e:
+                logger.warning(f"Could not fetch user context from Graphiti: {e}")
+        
+        return context
         
     async def queue_episode(self, episode_data: Dict[str, Any]) -> None:
         """

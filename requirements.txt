@@ -4,6 +4,7 @@
 # Core dependencies
 requests==2.32.4  # For LM Studio API calls
 python-dotenv==1.1.1  # For loading environment variables from .env file
+todoist-api-python>=2.1.3  # Todoist API integration for GTD capture
 
 # Graphiti Integration - FalkorDB only
 graphiti-core[falkordb,openai]==0.17.9  # Last version with FalkorDB support

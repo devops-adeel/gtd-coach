@@ -397,6 +397,10 @@ class WeeklyReviewWorkflow:
         state['current_phase'] = 'WRAP_UP'
         self.timer.start_phase('WRAP_UP')
         
+        # Reality Check: Analyze Timing data vs Intentions
+        timing_result = analyze_timing_tool.invoke({})
+        reality_check_msg = self._generate_reality_check(timing_result, state)
+        
         # Save to memory
         session_data = {
             'session_id': state['session_id'],
@@ -404,7 +408,8 @@ class WeeklyReviewWorkflow:
             'processed_items': state.get('processed_items', []),
             'weekly_priorities': state.get('weekly_priorities', []),
             'patterns': state.get('adhd_patterns', []),
-            'completed_phases': state['completed_phases']
+            'completed_phases': state['completed_phases'],
+            'reality_check': timing_result  # Save reality check data
         }
         
         save_result = save_memory_tool.invoke({
@@ -425,6 +430,9 @@ class WeeklyReviewWorkflow:
         msg += f"  • Captured: {len(state.get('captures', []))} items\n"
         msg += f"  • Processed: {len(state.get('processed_items', []))} actions\n"
         msg += f"  • Priorities set: {len(state.get('weekly_priorities', []))}\n\n"
+        
+        # Add reality check
+        msg += reality_check_msg + "\n"
         
         msg += f"💡 Your state: Energy={assessment['energy']}, Focus={assessment['focus']}\n\n"
         
@@ -494,6 +502,81 @@ class WeeklyReviewWorkflow:
             logger.info("Intervention needed based on patterns")
             return "intervene"
         return "continue"
+    
+    def _generate_reality_check(self, timing_data: Dict, state: AgentState) -> str:
+        """Generate reality check message comparing intentions vs actual time spent"""
+        msg = "🔍 REALITY CHECK (Timing vs Intentions):\n"
+        
+        if not timing_data or timing_data.get('error'):
+            msg += "  ⚠️ No Timing data available for reality check\n"
+            msg += "  💡 To enable: Create 3 projects manually in Timing app:\n"
+            msg += "     • Deep Work - Week XX (Green)\n"
+            msg += "     • Admin & Communication (Orange)\n"
+            msg += "     • Reactive & Urgent (Red)\n"
+            return msg
+        
+        # Extract key metrics
+        projects = timing_data.get('projects', [])
+        focus_metrics = timing_data.get('focus_metrics', {})
+        
+        # Find deep work vs admin time
+        deep_work_hours = 0
+        admin_hours = 0
+        reactive_hours = 0
+        
+        for project in projects:
+            name = project.get('name', '').lower()
+            hours = project.get('time_spent', 0)
+            
+            if 'deep work' in name or any(word in name for word in ['develop', 'design', 'write', 'research']):
+                deep_work_hours += hours
+            elif any(word in name for word in ['email', 'slack', 'meeting', 'admin']):
+                admin_hours += hours
+            else:
+                reactive_hours += hours
+        
+        total_hours = deep_work_hours + admin_hours + reactive_hours
+        
+        # Generate insights
+        if total_hours > 0:
+            deep_percent = (deep_work_hours / total_hours) * 100
+            admin_percent = (admin_hours / total_hours) * 100
+            
+            msg += f"  📊 Last week's reality:\n"
+            msg += f"    • Deep work: {deep_work_hours:.1f}h ({deep_percent:.0f}%)\n"
+            msg += f"    • Admin/Communication: {admin_hours:.1f}h ({admin_percent:.0f}%)\n"
+            msg += f"    • Other/Reactive: {reactive_hours:.1f}h\n\n"
+            
+            # Scatter score insight
+            if focus_metrics.get('scatter_score'):
+                scatter = focus_metrics['scatter_score']
+                if scatter > 50:
+                    msg += f"  ⚠️ High context switching detected (score: {scatter})\n"
+                    msg += "  💡 Try: Block 2-4pm for deep work only\n"
+                else:
+                    msg += f"  ✅ Good focus maintenance (scatter: {scatter})\n"
+            
+            # Reality ratio - compare to typical ADHD patterns
+            if deep_percent < 20:
+                msg += f"  📉 Only {deep_percent:.0f}% deep work - typical for ADHD\n"
+                msg += "  💡 This week: Try ONE 2-hour deep block\n"
+            elif deep_percent > 40:
+                msg += f"  🎯 Excellent! {deep_percent:.0f}% deep work achieved\n"
+        
+        # Check if last week's priorities were worked on
+        last_priorities = state.get('last_week_priorities', [])
+        if last_priorities and projects:
+            msg += "\n  📋 Last week's priorities check:\n"
+            for priority in last_priorities[:3]:
+                # Simple keyword matching
+                worked_on = any(priority.lower() in p.get('name', '').lower() for p in projects)
+                if worked_on:
+                    msg += f"    ✅ {priority}\n"
+                else:
+                    msg += f"    ❌ {priority} - Not tracked in Timing\n"
+                    msg += f"       Ask: Is this still a priority?\n"
+        
+        return msg
     
     def run(self, initial_state: Optional[Dict] = None, resume: bool = False) -> Dict:
         """

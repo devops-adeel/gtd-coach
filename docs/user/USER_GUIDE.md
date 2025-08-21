@@ -33,14 +33,19 @@
 - Type `help` for assistance
 - Empty line + `y` to finish early
 
-### 🎯 Daily Capture
-**Command:** `python -m gtd_coach capture`  
-**Time:** 10 minutes  
-**Purpose:** Quick brain dump & clarify  
+### 🎯 Daily Clarify (Ultra-Simple)
+**Command:** `python3 -m gtd_coach.commands.daily_clarify`  
+**Time:** 5-10 minutes  
+**Purpose:** Process inbox with ONE decision per item  
+
+Features:
+- Binary decision: Keep or Delete
+- Auto deep work detection (max 2/day)
+- Achieves inbox zero automatically
+- Priority Bankruptcy: Keep 10, delete rest
 
 Options:
-- `--skip-timing` - Skip Timing app data
-- `--voice` - Enable voice capture
+- `--verbose` - Show detailed processing
 
 ### ⏰ Test Timer
 **Command:** `./scripts/timer.sh 5 "Time's up!"`  
@@ -59,10 +64,19 @@ Options:
 - `--notify` - macOS notification
 - `--email` - Send report
 
-### 🔧 Setup Timing Projects
-**Command:** `python -m gtd_coach setup-timing`  
-**Purpose:** Create GTD projects in Timing app  
-**Options:** `--include-contexts` for @contexts
+### 🔧 Timing Setup (Manual)
+**Purpose:** Create 3 simple projects in Timing app  
+**Note:** API is read-only, manual setup required (2 minutes)
+
+Quick Setup:
+1. Open Timing app → Click + in Projects
+2. Create exactly 3 projects:
+   - **Deep Work - Week XX** (Green, High productivity)
+   - **Admin & Communication** (Orange, Neutral)
+   - **Reactive & Urgent** (Red, Low)
+3. Drag apps to assign (VS Code → Deep Work, Mail → Admin, etc.)
+
+See [docs/SETUP_TIMING.md](../SETUP_TIMING.md) for detailed guide
 
 ---
 
@@ -71,8 +85,9 @@ Options:
 | Task | Command | Time | Notes |
 |------|---------|------|-------|
 | **Weekly Review** | `./scripts/deployment/docker-run.sh` | 30m | Main GTD review |
-| **Daily Capture** | `python -m gtd_coach capture` | 10m | Quick clarify |
+| **Daily Clarify** | `python3 -m gtd_coach.commands.daily_clarify` | 5-10m | Inbox processing |
 | **Test Timer** | `./scripts/timer.sh 5 "Done"` | 5m | Audio check |
+| **Test Reality Check** | `python3 test_timing_read.py` | 1m | Verify Timing data |
 | **Resume Session** | `python -m gtd_coach --resume` | Varies | After interrupt |
 | **Docker Shell** | `./scripts/deployment/docker-run.sh shell` | - | Debug access |
 | **Run Tests** | `./scripts/test-orbstack.sh` | - | In container |
@@ -126,15 +141,22 @@ Shared knowledge persists across sessions
 </details>
 
 <details>
-<summary>✅ Todoist (Task Sync)</summary>
+<summary>✅ Todoist (Inbox Processing)</summary>
 
 ```bash
 # Add to .env
 TODOIST_API_KEY=your-token
-TODOIST_PROJECT_ID=project-id  # Optional
+TODOIST_PROJECT_ID=project-id  # Optional, defaults to Inbox
 
-# Syncs during WRAP-UP phase
+# Test connection
+python3 -c "from gtd_coach.integrations.todoist import TodoistClient; print(TodoistClient().get_inbox_count())"
 ```
+Features:
+- Auto-detects inbox (filters, projects)
+- Processes items with daily_clarify
+- Marks items complete after processing
+- Adds deep work items to Today view
+
 Get token from: https://todoist.com/app/settings/integrations
 </details>
 
@@ -170,6 +192,23 @@ docker compose build --no-cache
 # Check logs
 docker compose logs -f gtd-coach
 ```
+
+### Todoist inbox empty?
+```bash
+# Check if inbox is detected correctly
+python3 -c "from gtd_coach.integrations.todoist import TodoistClient; c = TodoistClient(); print(f'Inbox: {c.inbox_id}, Count: {c.get_inbox_count()}')"
+
+# Common fixes:
+# - Check TODOIST_PROJECT_ID in .env
+# - Try without PROJECT_ID (auto-detect)
+# - Verify items aren't in a filter
+```
+
+### Timing API returns 401?
+This is normal - the API is read-only. Create projects manually:
+1. Open Timing app
+2. Create 3 projects (Deep Work, Admin, Reactive)
+3. Reality checks will work with manual projects
 
 ### Can't find your data?
 - Mind sweeps: `data/mindsweep_*.json`
