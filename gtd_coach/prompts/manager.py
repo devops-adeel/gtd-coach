@@ -221,7 +221,8 @@ class PromptManager:
         """
         # Map prompt names to local files
         name_to_file = {
-            "gtd-coach-system": "system.txt",
+            "gtd-coach-system": "system.txt",  # Legacy name
+            "gtd-coach-system-v2": "system.txt",  # New name with critical instructions
             "gtd-coach-firm": "firm.txt",
             "gtd-coach-simple": "simple.txt",
             "gtd-coach-fallback": "fallback.txt",

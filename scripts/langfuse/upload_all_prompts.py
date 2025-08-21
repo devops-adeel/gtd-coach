@@ -22,17 +22,58 @@ def upload_prompts():
     # Read prompt files
     prompts_dir = Path.home() / "gtd-coach" / "config" / "prompts"
     
-    # System prompt (main)
+    # System prompt (main) - WITH CRITICAL INSTRUCTIONS
     with open(prompts_dir / "system.txt", 'r') as f:
-        system_prompt = f.read()
+        base_system_prompt = f.read()
     
+    # Add critical instructions for LangGraph agent behavior
+    critical_instructions = """
+
+CRITICAL INSTRUCTIONS FOR CONVERSATION FLOW:
+1. After calling transition_phase_v2, you MUST use one of the conversation tools to continue
+2. Use check_in_with_user_v2 for multiple questions in a phase
+3. Use wait_for_user_input_v2 for single questions
+4. Use confirm_with_user_v2 for yes/no confirmations
+
+PHASE-SPECIFIC BEHAVIOR:
+- STARTUP: After transitioning, use check_in_with_user_v2 with:
+  ["How's your energy level today on a scale of 1-10?",
+   "Do you have any concerns or blockers before we begin?",
+   "Are you ready to start the mind sweep phase?"]
+- MIND_SWEEP: Use wait_for_user_input_v2 to ask "What's been on your mind this week?"
+- PROJECT_REVIEW: Use wait_for_user_input_v2 to ask about specific projects
+- PRIORITIZATION: Use check_in_with_user_v2 to identify top 3 priorities
+- WRAP_UP: Use confirm_with_user_v2 to confirm session completion
+
+AVAILABLE CONVERSATION TOOLS:
+- check_in_with_user_v2(phase, questions): Ask multiple questions
+- wait_for_user_input_v2(prompt): Ask single question and wait
+- confirm_with_user_v2(message): Get yes/no confirmation
+
+IMPORTANT: The conversation tools will pause execution and wait for user input.
+Never end the conversation without using these tools to engage the user.
+
+PHASE TRANSITION FLOW:
+1. Start in STARTUP phase
+2. After STARTUP questions are complete, call transition_phase_v2("MIND_SWEEP")
+3. After MIND_SWEEP time is up, call transition_phase_v2("PROJECT_REVIEW") 
+4. After PROJECT_REVIEW, call transition_phase_v2("PRIORITIZATION")
+5. After PRIORITIZATION, call transition_phase_v2("WRAP_UP")
+6. Complete the session after WRAP_UP
+
+CRITICAL: You MUST progress through ALL 5 phases. Do not end the session early."""
+    
+    complete_system_prompt = base_system_prompt + critical_instructions
+    
+    # Create new version with complete instructions
     langfuse.create_prompt(
-        name="gtd-coach-system",
-        prompt=system_prompt,
+        name="gtd-coach-system-v2",
+        type="text",  # Must be TEXT format, not chat
+        prompt=complete_system_prompt,
         labels=["production"],
         config={"model": "gpt-4o", "temperature": 0.7}
     )
-    print("✅ Uploaded: gtd-coach-system")
+    print("✅ Uploaded: gtd-coach-system-v2 (with critical instructions)")
     
     # Firm tone prompt
     with open(prompts_dir / "firm.txt", 'r') as f:
