@@ -17,6 +17,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Interrupt, Send, Command
 try:
     from langgraph.types import interrupt
+    NodeInterrupt = interrupt
 except ImportError:
     class NodeInterrupt(Exception):
         pass
@@ -113,8 +114,8 @@ class TestInterruptPatterns:
             mock_interrupt.side_effect = NodeInterrupt("User input required")
             
             # Check for __interrupt__ in result instead of exception
-        # assert "__interrupt__" in result
-                result = graph.invoke(initial_state, config)
+            result = graph.invoke(initial_state, config)
+            # assert "__interrupt__" in result
         
         # Simulate resume with user input
         resume_command = Command(resume={"resumed_with": "User provided input"})

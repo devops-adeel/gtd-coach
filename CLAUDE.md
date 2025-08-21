@@ -74,3 +74,62 @@ When running tests that involve agent behavior or model interactions:
    - No code changes needed in individual tests
 
 See full documentation in `docs/` directory.
+
+## Recent Fixes and Maintenance (January 2025)
+
+### Critical Issues Resolved
+
+1. **Docker Disk Space Management**
+   - Added log rotation to all services in `docker-compose.yml` (max-size: 10m, max-file: 3)
+   - Created `scripts/docker_maintenance.sh` for automated cleanup
+   - Implemented disk space monitoring in `gtd_coach/utils/disk_monitor.py`
+   - Pre-flight disk space checks in agent runner
+
+2. **Async/Await Compatibility**
+   - Fixed `TracedOpenAIEmbedder` to use `LangfuseAsyncOpenAI` for proper async support
+   - Resolved "object CreateEmbeddingResponse can't be used in 'await' expression" error
+
+3. **Dynamic Prompt Content**
+   - Replaced literal "Project X" with `{project_name}` placeholder in system prompt
+   - Allows dynamic injection of actual project names at runtime
+
+### Maintenance Scripts
+
+**Docker Cleanup** (`scripts/docker_maintenance.sh`):
+```bash
+# Manual cleanup
+sudo ./scripts/docker_maintenance.sh
+
+# Setup automated daily cleanup at 2 AM
+./scripts/setup_maintenance_cron.sh
+```
+
+**Emergency Disk Recovery**:
+```bash
+# If disk space critical
+docker system prune -a --volumes -f
+sudo sh -c 'truncate -s 0 /var/lib/docker/containers/*/*-json.log'
+```
+
+### Monitoring Recommendations
+
+Consider deploying Netdata for real-time monitoring:
+```bash
+docker run -d --name=netdata \
+  -p 19999:19999 \
+  -v /etc/passwd:/host/etc/passwd:ro \
+  -v /etc/group:/host/etc/group:ro \
+  -v /proc:/host/proc:ro \
+  -v /sys:/host/sys:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  --cap-add SYS_PTRACE \
+  --security-opt apparmor=unconfined \
+  netdata/netdata
+```
+
+### Error Prevention
+
+- Docker logs are now automatically rotated
+- Disk space is checked before starting reviews
+- Async/await operations properly handle Langfuse tracing
+- System prompts use dynamic placeholders instead of literal examples
