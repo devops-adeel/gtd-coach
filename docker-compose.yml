@@ -48,6 +48,11 @@ services:
       - gtd-network
     # FalkorDB is running externally on host port 6380
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Test runner service
   test-runner:
@@ -77,6 +82,11 @@ services:
       - gtd-network
     profiles:
       - test
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Development environment with hot reload
   dev:
@@ -107,6 +117,11 @@ services:
     command: /bin/bash
     stdin_open: true
     tty: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Langfuse test service
   test-langfuse:
@@ -133,6 +148,11 @@ services:
     command: python3 test_langfuse.py
     profiles:
       - test
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Summary generator service
   generate-summary:
@@ -159,6 +179,11 @@ services:
     command: python3 scripts/generate_summary.py
     profiles:
       - tools
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   gtd-network:
