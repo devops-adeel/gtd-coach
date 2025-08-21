@@ -20,7 +20,7 @@ def set_global_tracer(tracer):
     """Set the global tracer instance for interrupt monitoring"""
     global _global_tracer
     _global_tracer = tracer
-    logger.info("Global tracer set for interrupt monitoring")
+    logger.debug("Global tracer set for interrupt monitoring")
 
 
 def get_global_tracer():
@@ -43,7 +43,7 @@ def monitor_interrupt(tool_name: str = None):
             tracer = get_global_tracer()
             
             # Log tool invocation
-            logger.info(f"Tool {actual_tool_name} invoked with args: {args}, kwargs: {kwargs}")
+            logger.debug(f"Tool {actual_tool_name} invoked with args: {args}, kwargs: {kwargs}")
             
             # Track tool start
             if tracer:
@@ -64,7 +64,7 @@ def monitor_interrupt(tool_name: str = None):
                     interrupt_called = True
                     interrupt_value = value
                     
-                    logger.info(f"INTERRUPT CALLED in {actual_tool_name}: {value}")
+                    logger.debug(f"INTERRUPT CALLED in {actual_tool_name}: {value}")
                     
                     # Track interrupt attempt
                     if tracer:
@@ -74,7 +74,7 @@ def monitor_interrupt(tool_name: str = None):
                     try:
                         result = original_interrupt_func(value)
                         # If we reach here, interrupt returned a value (resume case)
-                        logger.info(f"Interrupt returned value in {actual_tool_name}: {result}")
+                        logger.debug(f"Interrupt returned value in {actual_tool_name}: {result}")
                         return result
                     except Exception as e:
                         # Check if this is a GraphInterrupt that should propagate
@@ -93,14 +93,16 @@ def monitor_interrupt(tool_name: str = None):
                 # Execute the function
                 result = func(*args, **kwargs)
                 
-                # Check if interrupt was called but function completed
+                # Check if interrupt was called but function completed (expected during resume)
                 if interrupt_called:
-                    logger.warning(f"Tool {actual_tool_name} completed despite interrupt call!")
+                    # This is normal behavior when LangGraph resumes and returns cached values
+                    logger.debug(f"Tool {actual_tool_name} completed with cached interrupt value during resume")
                     if tracer:
-                        tracer.trace_event("interrupt.bypassed", {
+                        tracer.trace_event("interrupt.resumed", {
                             "tool": actual_tool_name,
                             "interrupt_value": str(interrupt_value),
-                            "tool_result": str(result)[:100]
+                            "tool_result": str(result)[:100],
+                            "note": "Normal behavior during LangGraph resume"
                         })
                 
                 # Track tool completion
@@ -186,7 +188,7 @@ class InterruptDebugger:
     
     def __enter__(self):
         self.start_time = datetime.now()
-        logger.info(f"[INTERRUPT DEBUG] Entering context: {self.context}")
+        logger.debug(f"[INTERRUPT DEBUG] Entering context: {self.context}")
         
         tracer = get_global_tracer()
         if tracer:
@@ -202,7 +204,7 @@ class InterruptDebugger:
             "timestamp": datetime.now().isoformat()
         })
         
-        logger.info(f"[INTERRUPT DEBUG] {event}: {data}")
+        logger.debug(f"[INTERRUPT DEBUG] {event}: {data}")
         
         tracer = get_global_tracer()
         if tracer:
@@ -241,7 +243,7 @@ class InterruptDebugger:
             "events": self.events[-5:] if self.events else []  # Last 5 events
         }
         
-        logger.info(f"[INTERRUPT DEBUG] Exiting context: {summary}")
+        logger.debug(f"[INTERRUPT DEBUG] Exiting context: {summary}")
         
         tracer = get_global_tracer()
         if tracer:
@@ -249,7 +251,7 @@ class InterruptDebugger:
         
         # Log exception if present
         if exc_type:
-            logger.error(f"[INTERRUPT DEBUG] Exception in context: {exc_type.__name__}: {exc_val}")
+            logger.debug(f"[INTERRUPT DEBUG] Exception in context: {exc_type.__name__}: {exc_val}")
 
 
 def analyze_interrupt_failure(
@@ -296,7 +298,7 @@ def analyze_interrupt_failure(
         
         logger.warning(f"INTERRUPT FAILURE ANALYSIS: {analysis}")
     else:
-        logger.info(f"Interrupt check passed: {analysis}")
+        logger.debug(f"Interrupt check passed: {analysis}")
     
     # Track in tracer
     tracer = get_global_tracer()

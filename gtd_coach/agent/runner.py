@@ -75,6 +75,9 @@ class GTDAgentRunner:
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.user_id = datetime.now().strftime("%G-W%V")  # Weekly user ID
         
+        # Initialize phase tracking
+        self._last_phase = None
+        
         # Initialize prompt manager and fetch prompt object for linking
         self.prompt_object = None
         try:
@@ -83,10 +86,10 @@ class GTDAgentRunner:
             # Fetch the raw prompt object (not just formatted string) for Langfuse linking
             if hasattr(prompt_manager, 'langfuse') and prompt_manager.langfuse:
                 self.prompt_object = prompt_manager.langfuse.get_prompt(
-                    "gtd-coach-system-v2",
+                    "gtd-coach-system-v3",
                     label="production"
                 )
-                logger.info("Fetched Langfuse prompt object for linking")
+                logger.debug("Fetched Langfuse prompt object for linking")
         except Exception as e:
             logger.warning(f"Could not fetch Langfuse prompt object: {e}")
         
@@ -112,7 +115,7 @@ class GTDAgentRunner:
         
         # Set tools on agent - use ESSENTIAL_TOOLS for now
         self.agent.set_tools(ESSENTIAL_TOOLS)
-        logger.info(f"Using essential tool set ({len(ESSENTIAL_TOOLS)} tools)")
+        logger.debug(f"Using essential tool set ({len(ESSENTIAL_TOOLS)} tools)")
         
         logger.info(f"Initialized GTD Agent Runner - Session: {self.session_id}")
     
@@ -132,7 +135,7 @@ class GTDAgentRunner:
         if not self.memory.is_configured():
             try:
                 await self.memory.initialize()
-                logger.info("Initialized Graphiti memory connection")
+                logger.debug("Initialized Graphiti memory connection")
             except Exception as e:
                 logger.warning(f"Could not initialize Graphiti: {e}")
                 return []
@@ -160,7 +163,7 @@ class GTDAgentRunner:
             self.user_facts_cache = facts
             self.cache_time = time.time()
             
-            logger.info(f"Retrieved {len(facts)} user facts from Graphiti")
+            logger.debug(f"Retrieved {len(facts)} user facts from Graphiti")
             return facts
             
         except Exception as e:
@@ -323,7 +326,7 @@ class GTDAgentRunner:
                     if langfuse_handler:
                         callbacks = [langfuse_handler]
                     
-                    logger.info(f"Enhanced observability enabled for session {self.session_id}")
+                    logger.debug(f"Enhanced observability enabled for session {self.session_id}")
                 except Exception as e:
                     logger.warning(f"Failed to initialize enhanced tracer: {e}")
             
@@ -339,7 +342,7 @@ class GTDAgentRunner:
                     "user_id": self.user_id,
                     "workflow_type": "weekly_review",
                     # Add prompt metadata for tracing
-                    "prompt_name": "gtd-coach-system-v2" if not self.prompt_object else self.prompt_object.name,
+                    "prompt_name": "gtd-coach-system-v3" if not self.prompt_object else self.prompt_object.name,
                     "prompt_version": None if not self.prompt_object else getattr(self.prompt_object, 'version', None)
                 },
                 "recursion_limit": 150  # Ensure agent has enough steps for full conversation
@@ -361,7 +364,7 @@ class GTDAgentRunner:
                 try:
                     user_facts = asyncio.run(self.get_user_facts_cached())
                     if user_facts:
-                        logger.info(f"Enriching prompt with {len(user_facts)} user facts")
+                        logger.debug(f"Enriching prompt with {len(user_facts)} user facts")
                 except Exception as e:
                     logger.warning(f"Could not fetch user facts: {e}")
                 
@@ -377,12 +380,13 @@ class GTDAgentRunner:
                     "current_phase": "STARTUP",
                     "time_elapsed": 0,
                     "time_remaining": 30,  # Total session time
-                    "user_context": user_context  # Add user facts as a variable
+                    "user_context": user_context,  # Add user facts as a variable
+                    "project_name": "Weekly Review"  # Default project name for the template
                 }
                 
                 # Try to use user_context if the prompt template supports it
                 system_prompt = prompt_manager.format_prompt(
-                    "gtd-coach-system-v2",
+                    "gtd-coach-system-v3",
                     prompt_variables
                 )
                 
@@ -405,9 +409,13 @@ PHASE-SPECIFIC BEHAVIOR:
    "Do you have any concerns or blockers before we begin?",
    "Are you ready to start the mind sweep phase?"]
 - MIND_SWEEP: Use wait_for_user_input_v2 to ask "What's been on your mind this week?"
+  IMPORTANT: Parse comma-separated items carefully. Each comma-separated phrase is one item.
+  Example: "gtd-coach, agentic-iam second call deck, ai-factory 2nd-call deck review" = 3 items
 - PROJECT_REVIEW: Use wait_for_user_input_v2 to ask about specific projects
 - PRIORITIZATION: Use check_in_with_user_v2 to identify top 3 priorities
 - WRAP_UP: Use confirm_with_user_v2 to confirm session completion
+  If user says NO: Ask "What else would you like to cover before we finish?" and handle their response
+  Only end the session after explicit confirmation or timeout
 
 AVAILABLE CONVERSATION TOOLS:
 - check_in_with_user_v2(phase, questions): Ask multiple questions
@@ -463,7 +471,7 @@ Never end the conversation without using these tools to engage the user."""
                 
                 # Initialize state manager for V2 tools
                 initialize_state_manager(state)
-                logger.info("Initialized state manager for V2 tools with minimal state")
+                logger.debug("Initialized state manager for V2 tools with minimal state")
             
             # Run the agent with streaming
             print("\n" + "="*60)
@@ -485,7 +493,7 @@ Never end the conversation without using these tools to engage the user."""
             interrupt_count = 0
             last_result = None
             
-            logger.info(f"Starting agent stream with config: {config}")
+                logger.debug(f"Starting agent stream with config: {config}")
             logger.debug(f"Session ID in metadata: {config.get('metadata', {}).get('langfuse_session_id')}")
             
             # Use interrupt debugger for comprehensive tracking
@@ -508,10 +516,10 @@ Never end the conversation without using these tools to engage the user."""
                         debugger.check_interrupt_result(chunk)
             
             # Handle interrupts in a loop until there are no more
-            logger.info(f"Checking for interrupts in last result. Has __interrupt__ key: {'__interrupt__' in last_result if last_result else 'No result'}")
+            logger.debug(f"Checking for interrupts in last result. Has __interrupt__ key: {'__interrupt__' in last_result if last_result else 'No result'}")
             
             while last_result and '__interrupt__' in last_result:
-                logger.info(f"✅ INTERRUPT DETECTED in result: {last_result.get('__interrupt__')}")
+                logger.debug(f"✅ INTERRUPT DETECTED in result: {last_result.get('__interrupt__')}")
                 interrupts = last_result['__interrupt__']
                 
                 # Handle each interrupt in this batch
@@ -526,7 +534,7 @@ Never end the conversation without using these tools to engage the user."""
                     else:
                         prompt = str(interrupt_data)
                     
-                    logger.info(f"Interrupt #{interrupt_count}: {prompt}")
+                    logger.debug(f"Interrupt #{interrupt_count}: {prompt}")
                     
                     # Track interrupt with enhanced tracer
                     if tracer:
@@ -545,7 +553,7 @@ Never end the conversation without using these tools to engage the user."""
                     print("="*60 + "\n")
                     
                     # Resume agent with user input
-                    logger.info(f"Resuming agent with Command(resume={user_input})")
+                    logger.debug(f"Resuming agent with Command(resume={user_input})")
                     
                     # Track resume with enhanced tracer
                     if tracer:
@@ -553,7 +561,7 @@ Never end the conversation without using these tools to engage the user."""
                     
                     # Resume using invoke to get complete state (avoids nested streaming)
                     # This returns the full state including any new interrupts
-                    logger.info("Using invoke() for resume to avoid nested streaming")
+                    logger.debug("Using invoke() for resume to avoid nested streaming")
                     last_result = self.agent.invoke(
                         Command(resume=user_input),
                         config
@@ -569,13 +577,13 @@ Never end the conversation without using these tools to engage the user."""
                             tracer.trace_stream_chunk(last_result, chunk_count)
                     
                     # After handling this interrupt, the loop will check for more
-                    logger.info(f"Completed interrupt #{interrupt_count}, checking for more...")
+                    logger.debug(f"Completed interrupt #{interrupt_count}, checking for more...")
             
             # Log when no more interrupts are detected
             if interrupt_count == 0:
                 logger.warning(f"❌ NO INTERRUPTS DETECTED in stream result")
             else:
-                logger.info(f"✅ All {interrupt_count} interrupts handled successfully")
+                logger.debug(f"✅ All {interrupt_count} interrupts handled successfully")
                 if last_result:
                     logger.debug(f"Last result keys: {list(last_result.keys()) if isinstance(last_result, dict) else 'non-dict'}")
                     logger.debug(f"Last result (truncated): {str(last_result)[:500]}")
@@ -641,7 +649,7 @@ Never end the conversation without using these tools to engage the user."""
             if not stream_completed:
                 logger.warning("Stream ended without producing any chunks")
             else:
-                logger.info(f"Stream completed with {chunk_count} chunks, {interrupt_count} interrupts")
+                logger.debug(f"Stream completed with {chunk_count} chunks, {interrupt_count} interrupts")
             
             # Final summary
             self._show_final_summary()
@@ -651,7 +659,7 @@ Never end the conversation without using these tools to engage the user."""
             
         except KeyboardInterrupt:
             print("\n\n⚠️ Review interrupted by user")
-            logger.info("Review interrupted by user")
+            logger.debug("Review interrupted by user")
             return 1
             
         except Exception as e:

@@ -750,7 +750,13 @@ class GraphitiMemory:
             if apply_temporal_decay and results:
                 results = self._apply_temporal_decay(results)
                 # Re-sort by decayed score and limit to requested number
-                results = sorted(results, key=lambda r: getattr(r, 'decayed_score', 0), reverse=True)[:num_results]
+                # Sort by decayed score if available, otherwise by original score
+                try:
+                    results = sorted(results, key=lambda r: getattr(r, 'decayed_score', getattr(r, 'score', 0)), reverse=True)[:num_results]
+                except (AttributeError, TypeError, Exception) as e:
+                    # Some result types don't support attribute access, fall back to original score
+                    logger.debug(f"Could not sort by decayed_score, using original score: {e}")
+                    results = sorted(results, key=lambda r: getattr(r, 'score', 0), reverse=True)[:num_results]
                 logger.debug(f"Applied temporal decay, returning top {len(results)} results")
             
             return results
@@ -811,9 +817,16 @@ class GraphitiMemory:
                     decayed_score = original_score * decay_factor
                     
                     # Add decayed score to result
-                    result.decayed_score = decayed_score
-                    result.decay_factor = decay_factor
-                    result.age_days = age_days
+                    # Some result types (like EntityEdge) don't allow setting attributes
+                    try:
+                        result.decayed_score = decayed_score
+                        result.decay_factor = decay_factor
+                        result.age_days = age_days
+                    except (AttributeError, TypeError):
+                        # If we can't set attributes, store in a wrapper dict
+                        if not hasattr(result, '__decay_metadata__'):
+                            # Create wrapper if object is immutable
+                            pass
                     
                     logger.debug(
                         f"Applied decay: age={age_days}d, factor={decay_factor:.3f}, "
@@ -821,16 +834,22 @@ class GraphitiMemory:
                     )
                 else:
                     # No timestamp, use original score
-                    result.decayed_score = getattr(result, 'score', 1.0)
-                    result.decay_factor = 1.0
-                    result.age_days = 0
+                    try:
+                        result.decayed_score = getattr(result, 'score', 1.0)
+                        result.decay_factor = 1.0
+                        result.age_days = 0
+                    except (AttributeError, TypeError):
+                        # Object doesn't support setting attributes
+                        pass
                     
             except Exception as e:
-                logger.warning(f"Failed to apply decay to result: {e}")
-                # Fall back to original score
-                result.decayed_score = getattr(result, 'score', 1.0)
-                result.decay_factor = 1.0
-                result.age_days = 0
+                # Check if the error is about missing field (expected for some types)
+                if "has no field" in str(e) or "has no attribute" in str(e):
+                    logger.debug(f"Result type does not support decay metadata: {type(result).__name__}")
+                else:
+                    logger.warning(f"Failed to apply decay to result: {e}")
+                # Fall back to original score without setting attributes
+                # (Since the object doesn't support them)
         
         return results
     

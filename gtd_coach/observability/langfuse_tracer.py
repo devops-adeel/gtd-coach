@@ -174,7 +174,7 @@ class LangfuseTracer:
             success_rate = self.metrics["interrupt_captures"] / self.metrics["interrupt_attempts"]
             self.trace_event("interrupt.success_rate", {"rate": success_rate}, success_rate)
         
-        logger.info(f"Interrupt captured: {interrupt_data}")
+        logger.debug(f"Interrupt captured: {interrupt_data}")
     
     @contextmanager
     def span_interrupt(self, interrupt_type: str, prompt: str = None):
@@ -256,7 +256,7 @@ class LangfuseTracer:
             completed = self.interrupt_stack.pop()
             self.trace_event("interrupt.completed", completed)
         
-        logger.info(f"Interrupt resumed with: {user_input}")
+        logger.debug(f"Interrupt resumed with: {user_input}")
     
     def trace_tool_call(self, tool_name: str, args: Dict = None, start: bool = True):
         """

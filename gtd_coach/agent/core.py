@@ -20,6 +20,9 @@ from langgraph.types import Command
 from pathlib import Path
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+# Import token tracking fix
+from .core_metrics_fix import inject_token_tracking
+
 logger = logging.getLogger(__name__)
 
 
@@ -82,6 +85,7 @@ class PromptLinkedLLM:
         return self._original_stream(messages, stop=stop, run_manager=run_manager, **kwargs)
 
 
+@inject_token_tracking
 class GTDAgent:
     """
     Main GTD Coach agent using LangGraph ReAct pattern
