@@ -42,6 +42,19 @@ except ImportError:
     OBSERVABILITY_AVAILABLE = False
     LangfuseTracer = None
 
+# Import disk monitoring
+try:
+    from gtd_coach.utils.disk_monitor import (
+        DiskSpaceMonitor,
+        check_disk_space,
+        DiskSpaceError
+    )
+    DISK_MONITOR_AVAILABLE = True
+except ImportError:
+    DISK_MONITOR_AVAILABLE = False
+    DiskSpaceMonitor = None
+    DiskSpaceError = Exception
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,7 +83,7 @@ class GTDAgentRunner:
             # Fetch the raw prompt object (not just formatted string) for Langfuse linking
             if hasattr(prompt_manager, 'langfuse') and prompt_manager.langfuse:
                 self.prompt_object = prompt_manager.langfuse.get_prompt(
-                    "gtd-coach-system",
+                    "gtd-coach-system-v2",
                     label="production"
                 )
                 logger.info("Fetched Langfuse prompt object for linking")
@@ -270,6 +283,17 @@ class GTDAgentRunner:
             Exit code (0 for success)
         """
         try:
+            # Check disk space before starting
+            if DISK_MONITOR_AVAILABLE:
+                is_ok, msg = check_disk_space(warning_threshold=75.0)
+                if not is_ok:
+                    logger.error(f"Insufficient disk space: {msg}")
+                    logger.error("Please free up disk space before running the review")
+                    logger.error("Run: docker system prune -a --volumes")
+                    return 1
+                elif msg:
+                    logger.warning(msg)
+            
             # Track session start time for metrics
             session_start_time = time.time()
             
@@ -315,7 +339,7 @@ class GTDAgentRunner:
                     "user_id": self.user_id,
                     "workflow_type": "weekly_review",
                     # Add prompt metadata for tracing
-                    "prompt_name": "gtd-coach-system" if not self.prompt_object else self.prompt_object.name,
+                    "prompt_name": "gtd-coach-system-v2" if not self.prompt_object else self.prompt_object.name,
                     "prompt_version": None if not self.prompt_object else getattr(self.prompt_object, 'version', None)
                 },
                 "recursion_limit": 150  # Ensure agent has enough steps for full conversation
@@ -358,7 +382,7 @@ class GTDAgentRunner:
                 
                 # Try to use user_context if the prompt template supports it
                 system_prompt = prompt_manager.format_prompt(
-                    "gtd-coach-system",
+                    "gtd-coach-system-v2",
                     prompt_variables
                 )
                 
