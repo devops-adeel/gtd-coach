@@ -64,9 +64,46 @@ class PromptManager:
                 )
                 
                 # Get the Langchain-compatible prompt
-                # This converts {{var}} to {var} format
-                prompt_text = prompt_obj.get_langchain_prompt()
-                logger.debug(f"Fetched prompt '{name}' from Langfuse")
+                # This can return either a string (text prompt) or list (chat prompt)
+                langchain_result = prompt_obj.get_langchain_prompt()
+                
+                if isinstance(langchain_result, str):
+                    # Text prompt - return as is
+                    prompt_text = langchain_result
+                elif isinstance(langchain_result, list):
+                    # Chat prompt - extract system message or concatenate
+                    if langchain_result:
+                        # Try to find system message first
+                        system_msg = None
+                        for msg in langchain_result:
+                            # Handle both dict and tuple formats
+                            if isinstance(msg, dict) and msg.get('role') == 'system':
+                                system_msg = msg
+                                break
+                            elif isinstance(msg, (tuple, list)) and len(msg) >= 2 and msg[0] == 'system':
+                                system_msg = {'role': 'system', 'content': msg[1]}
+                                break
+                        
+                        if system_msg:
+                            prompt_text = system_msg.get('content', '')
+                        else:
+                            # Fallback: use first message or concatenate all
+                            texts = []
+                            for msg in langchain_result:
+                                if isinstance(msg, dict):
+                                    texts.append(msg.get('content', ''))
+                                elif isinstance(msg, (tuple, list)) and len(msg) >= 2:
+                                    texts.append(str(msg[1]))
+                                else:
+                                    texts.append(str(msg))
+                            prompt_text = ' '.join(texts)
+                    else:
+                        prompt_text = ""
+                else:
+                    logger.warning(f"Unexpected type from get_langchain_prompt for '{name}': {type(langchain_result)}")
+                    prompt_text = str(langchain_result)
+                
+                logger.debug(f"Fetched prompt '{name}' from Langfuse (type: {type(langchain_result).__name__})")
                 return prompt_text
                 
             except Exception as e:
@@ -89,8 +126,44 @@ class PromptManager:
         if self.langfuse:
             try:
                 prompt_obj = self.langfuse.get_prompt(name=name, label=label)
+                langchain_result = prompt_obj.get_langchain_prompt()
+                
+                # Handle both text and chat prompts
+                if isinstance(langchain_result, str):
+                    prompt_text = langchain_result
+                elif isinstance(langchain_result, list):
+                    # Extract system message or concatenate for chat prompts
+                    if langchain_result:
+                        system_msg = None
+                        for msg in langchain_result:
+                            # Handle both dict and tuple formats
+                            if isinstance(msg, dict) and msg.get('role') == 'system':
+                                system_msg = msg
+                                break
+                            elif isinstance(msg, (tuple, list)) and len(msg) >= 2 and msg[0] == 'system':
+                                system_msg = {'role': 'system', 'content': msg[1]}
+                                break
+                        
+                        if system_msg:
+                            prompt_text = system_msg.get('content', '')
+                        else:
+                            # Fallback: concatenate all messages
+                            texts = []
+                            for msg in langchain_result:
+                                if isinstance(msg, dict):
+                                    texts.append(msg.get('content', ''))
+                                elif isinstance(msg, (tuple, list)) and len(msg) >= 2:
+                                    texts.append(str(msg[1]))
+                                else:
+                                    texts.append(str(msg))
+                            prompt_text = ' '.join(texts)
+                    else:
+                        prompt_text = ""
+                else:
+                    prompt_text = str(langchain_result)
+                
                 return {
-                    "prompt": prompt_obj.get_langchain_prompt(),
+                    "prompt": prompt_text,
                     "config": prompt_obj.config or {}
                 }
             except Exception as e:
@@ -117,15 +190,23 @@ class PromptManager:
         """
         prompt_template = self.get_prompt(name, label)
         
+        # Ensure we have a string to format
+        if not isinstance(prompt_template, str):
+            logger.error(f"Prompt '{name}' returned non-string type: {type(prompt_template)}")
+            prompt_template = str(prompt_template)
+        
         # Format the prompt with variables
         try:
             formatted = prompt_template.format(**variables)
             return formatted
-        except KeyError as e:
-            logger.error(f"Missing variable in prompt '{name}': {e}")
-            # Return template with partial substitution
+        except (KeyError, AttributeError) as e:
+            logger.error(f"Error formatting prompt '{name}': {e}")
+            # Fallback: partial substitution
             for key, value in variables.items():
-                prompt_template = prompt_template.replace(f"{{{key}}}", str(value))
+                try:
+                    prompt_template = prompt_template.replace(f"{{{key}}}", str(value))
+                except Exception:
+                    pass
             return prompt_template
     
     def _get_local_prompt(self, name: str) -> str:
