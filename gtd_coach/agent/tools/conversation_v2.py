@@ -62,7 +62,7 @@ def check_in_with_user_v2(
     
     responses = {}
     for i, question in enumerate(questions, 1):
-        logger.info(f"[INTERRUPT DEBUG] About to call interrupt with question {i}/{len(questions)}: {question}")
+        logger.debug(f"[INTERRUPT DEBUG] About to call interrupt with question {i}/{len(questions)}: {question}")
         
         # Use interrupt to pause and wait for user input
         user_response = interrupt(question)
@@ -104,7 +104,7 @@ def wait_for_user_input_v2(prompt: str) -> str:
     Example:
         wait_for_user_input_v2("What would you like to focus on today?")
     """
-    logger.info(f"[INTERRUPT DEBUG] Waiting for user input with prompt: {prompt}")
+    logger.debug(f"[INTERRUPT DEBUG] Waiting for user input with prompt: {prompt}")
     
     # Get tracer for additional logging
     tracer = get_global_tracer()
@@ -112,7 +112,7 @@ def wait_for_user_input_v2(prompt: str) -> str:
         tracer.trace_event("conversation.wait_input.start", {"prompt": prompt})
     
     # Interrupt execution and wait for response
-    logger.info(f"[INTERRUPT DEBUG] About to call interrupt with prompt: {prompt}")
+    logger.debug(f"[INTERRUPT DEBUG] About to call interrupt with prompt: {prompt}")
     response = interrupt(prompt)
     
     # If we reach here, interrupt didn't actually pause
@@ -146,7 +146,7 @@ def confirm_with_user_v2(
     Example:
         confirm_with_user_v2("Are you ready to start the mind sweep phase?")
     """
-    logger.info(f"[INTERRUPT DEBUG] Asking for confirmation: {message}")
+    logger.debug(f"[INTERRUPT DEBUG] Asking for confirmation: {message}")
     
     # Get tracer for additional logging
     tracer = get_global_tracer()
@@ -161,7 +161,7 @@ def confirm_with_user_v2(
     full_prompt = message + hint
     
     # Interrupt and wait for response
-    logger.info(f"[INTERRUPT DEBUG] About to call interrupt with confirmation: {full_prompt}")
+    logger.debug(f"[INTERRUPT DEBUG] About to call interrupt with confirmation: {full_prompt}")
     response = interrupt(full_prompt)
     
     # If we reach here, interrupt didn't actually pause

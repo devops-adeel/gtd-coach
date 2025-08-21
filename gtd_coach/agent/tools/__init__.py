@@ -26,11 +26,26 @@ from .interaction import (
     provide_encouragement_tool
 )
 
-# Import conversation tools (V2 - Uses interrupt pattern)
-from .conversation_v2 import (
-    check_in_with_user_v2,
-    wait_for_user_input_v2,
-    confirm_with_user_v2
+# Import conversation tools (V3 - Fixed single interrupt pattern)
+from .conversation_v3 import (
+    ask_question_v3,
+    ask_yes_no_v3,
+    startup_questions_v3,
+    collect_mind_sweep_v3,
+    collect_priorities_v3,
+    # Legacy compatibility wrappers
+    wait_for_user_input_v3,
+    confirm_with_user_v3
+)
+
+# Import data capture tools (V2 - Data persistence)
+from .capture_v2 import (
+    save_mind_sweep_item_v2,
+    save_weekly_priority_v2,
+    save_project_update_v2,
+    save_user_response_v2,
+    batch_save_mind_sweep_v2,
+    get_saved_priorities_v2
 )
 
 # Import all existing tools
@@ -371,11 +386,23 @@ INTERACTION_TOOLS = [
 ALL_TOOLS = (TIME_TOOLS + INTERACTION_TOOLS + TIMING_TOOLS + 
             CAPTURE_TOOLS + GTD_TOOLS + MEMORY_TOOLS + ADAPTIVE_TOOLS)
 
-# Conversation tools (V2 - Uses interrupt pattern)
+# Conversation tools (V3 - Fixed single interrupt pattern)
 CONVERSATION_TOOLS = [
-    check_in_with_user_v2,
-    wait_for_user_input_v2,
-    confirm_with_user_v2
+    ask_question_v3,
+    ask_yes_no_v3,
+    startup_questions_v3,
+    collect_mind_sweep_v3,
+    collect_priorities_v3
+]
+
+# Data capture tools (V2 - Persistence)
+DATA_CAPTURE_TOOLS = [
+    save_mind_sweep_item_v2,
+    save_weekly_priority_v2,
+    save_project_update_v2,
+    save_user_response_v2,
+    batch_save_mind_sweep_v2,
+    get_saved_priorities_v2
 ]
 
 # Minimal essential tools for weekly review (to fit in 4096 token context)
@@ -383,17 +410,15 @@ ESSENTIAL_TOOLS = [
     # Core time management (2)
     check_time_tool,
     transition_phase_tool,
-    # Core conversation (3) - NEW: Uses interrupt pattern
-    check_in_with_user_v2,
-    wait_for_user_input_v2,
-    confirm_with_user_v2,
-    # Core capture (2) 
-    brain_dump_tool,
-    capture_item_tool,
-    # Core GTD (2)
-    clarify_items_tool,
-    prioritize_actions_tool,
-    # Core interaction (1) - removed structured_input_tool as it uses old InjectedState
+    # Core conversation (2) - V3: Fixed single interrupt
+    ask_question_v3,
+    ask_yes_no_v3,
+    # Core data capture (4) - V2: Persistence
+    save_user_response_v2,
+    save_mind_sweep_item_v2,
+    save_weekly_priority_v2,
+    save_project_update_v2,
+    # Core interaction (1)
     show_progress_tool,
     # Core memory (1)
     save_memory_tool,
