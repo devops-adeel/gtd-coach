@@ -25,6 +25,7 @@ from gtd_coach.integrations.timing_comparison import (
 )
 from gtd_coach.integrations.graphiti import GraphitiMemory
 from gtd_coach.patterns.adhd_metrics import ADHDPatternDetector
+from gtd_coach.deprecation.decorator import deprecate_daily_alignment
 
 
 class DailyAlignmentChecker:
@@ -362,6 +363,7 @@ class DailyAlignmentChecker:
         except Exception as e:
             self.logger.error(f"Failed to save to file: {e}")
     
+    @deprecate_daily_alignment
     async def run(self, notify: bool = False, email: bool = False) -> Dict:
         """Run the daily alignment check
         

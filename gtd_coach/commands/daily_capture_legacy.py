@@ -32,6 +32,7 @@ from gtd_coach.integrations.gtd_entities import (
 )
 from gtd_coach.integrations.graphiti import GraphitiMemory
 from gtd_coach.integrations.timing import TimingAPI
+from gtd_coach.deprecation.decorator import deprecate_daily_capture
 
 
 class InboxSource(str, Enum):
@@ -685,6 +686,7 @@ class DailyCaptureCoach:
         except Exception as e:
             self.logger.error(f"Failed to save session: {e}")
     
+    @deprecate_daily_capture
     async def run(self) -> Dict:
         """Run the daily capture session"""
         print("\n🌅 Starting Daily Capture & Clarify Session\n")

@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from gtd_coach.integrations.todoist import TodoistClient
 from gtd_coach.integrations.graphiti import GraphitiMemory
+from gtd_coach.deprecation.decorator import deprecate_daily_clarify
 
 
 class DailyClarify:
@@ -155,6 +156,7 @@ class DailyClarify:
         except Exception as e:
             self.logger.error(f"Failed to save metrics: {e}")
     
+    @deprecate_daily_clarify
     def run(self):
         """Run the clarify session"""
         print("\n🌟 DAILY CLARIFY - Ultra Simple Mode")
