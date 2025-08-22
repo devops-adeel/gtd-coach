@@ -16,21 +16,18 @@ Requirements: [LM Studio](https://lmstudio.ai/) with Llama 3.1 8B model loaded.
 
 ## Documentation
 
-### 📚 Learn
-- [**Getting Started Tutorial**](docs/tutorial/getting-started.md) - Your first review
+### 🚀 For Users
+- [**Getting Started**](docs/user/getting-started.md) - Your first weekly review
+- [**ADHD Success Guide**](docs/user/adhd-guide.md) - Tips for ADHD brains
 
-### 🔧 Do
+### 👩‍💻 For Developers  
+- [**LangGraph Development**](docs/dev/langgraph-development.md) - Agent architecture & patterns
+- [**API Reference**](docs/dev/api-reference.md) - Tools, state, and integration points
+
+### 📚 Learn More
+- [**Tutorial**](docs/tutorial/getting-started.md) - Detailed walkthrough
 - [**Setup Guide**](docs/how-to/setup.md) - Installation options
-- [**Configure Integrations**](docs/how-to/configure-integrations.md) - Timing, Langfuse, Graphiti
-- [**Testing Guide**](docs/how-to/testing.md) - Run tests
-
-### 📖 Reference
-- [**Configuration**](docs/reference/configuration.md) - All settings
-- [**CLI Reference**](docs/reference/cli.md) - Commands and options
-- [**API Reference**](docs/reference/api.md) - Data formats
-
-### 💡 Understand
-- [**Architecture**](docs/explanation/architecture.md) - How it works
+- [**Architecture**](docs/explanation/architecture.md) - System design
 - [**ADHD Design**](docs/explanation/adhd-design.md) - Why these choices
 
 ## Key Features
