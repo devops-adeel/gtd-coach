@@ -82,3 +82,4 @@ docs/_build/
 
 # Claude local settings (may contain API keys)
 .claude/
+test_agent_results.json
