@@ -38,6 +38,24 @@ from .conversation_v3 import (
     confirm_with_user_v3
 )
 
+# Import clarify tools (V3 - Single interrupt for decisions)
+from .clarify_v3 import (
+    clarify_decision_v3,
+    batch_clarify_preview_v3,
+    deep_work_confirmation_v3,
+    clarify_break_v3,
+    clarify_session_summary_v3
+)
+
+# Import Todoist integration tools
+from .todoist import (
+    get_inbox_tasks_tool,
+    add_to_today_tool,
+    mark_task_complete_tool,
+    check_deep_work_limit_tool,
+    analyze_task_for_deep_work_tool
+)
+
 # Import data capture tools (V2 - Data persistence)
 from .capture_v2 import (
     save_mind_sweep_item_v2,

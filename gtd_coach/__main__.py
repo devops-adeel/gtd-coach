@@ -76,6 +76,27 @@ def main():
         help="Skip Timing app review"
     )
     
+    # Daily clarify (Todoist inbox processing)
+    clarify_parser = subparsers.add_parser(
+        "clarify",
+        help="Process Todoist inbox with keep/delete decisions"
+    )
+    clarify_parser.add_argument(
+        "--legacy",
+        action="store_true",
+        help="Use legacy implementation (deprecated)"
+    )
+    clarify_parser.add_argument(
+        "--compare",
+        action="store_true",
+        help="Run both implementations and compare (for testing)"
+    )
+    clarify_parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Show migration status"
+    )
+    
     # Parse arguments
     args = parser.parse_args()
     
@@ -118,6 +139,27 @@ def main():
         from gtd_coach.commands.daily_capture import DailyCaptureCoach
         coach = DailyCaptureCoach()
         asyncio.run(coach.run())
+        sys.exit(0)
+    
+    elif args.command == "clarify":
+        # Import and run clarify with migration adapter
+        from gtd_coach.migration.clarify_adapter import ClarifyMigrationAdapter
+        import os
+        
+        adapter = ClarifyMigrationAdapter()
+        
+        # Handle special flags
+        if args.status:
+            status = adapter.get_migration_status()
+            print("\n📊 Clarify Migration Status")
+            print("=" * 40)
+            for key, value in status.items():
+                print(f"{key}: {value}")
+            sys.exit(0)
+        
+        # Run clarify with appropriate settings
+        use_legacy = args.legacy or os.getenv("USE_LEGACY_CLARIFY", "false").lower() == "true"
+        adapter.run(use_legacy=use_legacy, show_comparison=args.compare)
         sys.exit(0)
     
     else:
